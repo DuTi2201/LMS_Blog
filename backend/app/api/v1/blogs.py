@@ -239,7 +239,7 @@ def update_blog_post(
         )
     
     try:
-        post = blog_service.update_blog_post(post_id, post_update)
+        post = blog_service.update_post(post_id, post_update, current_user.id)
         return post
     except ValueError as e:
         raise HTTPException(
