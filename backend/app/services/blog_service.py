@@ -1,323 +1,99 @@
-from typing import Optional, List, Tuple
+from typing import List, Optional, Dict, Any
 from uuid import UUID
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, and_, desc, asc, func
-from fastapi import HTTPException, status
 from datetime import datetime
-from typing import List, Optional, Tuple
-import re
+from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_, func, desc
+from fastapi import HTTPException, status
 
-from ..models.blog import BlogPost, BlogCategory, BlogTag, blog_post_tags
-from ..models.user import User
-from ..schemas.blog import (
-    BlogPostCreate, BlogPostUpdate, BlogSearchParams,
-    BlogCategoryCreate, BlogCategoryUpdate,
-    BlogTagCreate, BlogTagUpdate
+from app.models.blog import BlogPost, BlogCategory, BlogTag, blog_post_tags
+from app.models.user import User, UserRole
+from app.schemas.blog import (
+    BlogPostCreate, BlogPostUpdate, BlogCategoryCreate, BlogCategoryUpdate,
+    BlogTagCreate, BlogTagUpdate, BlogSearchParams
 )
+from app.core.utils import generate_slug, calculate_read_time
 
 
 class BlogService:
     def __init__(self, db: Session):
         self.db = db
     
-    def _generate_slug(self, title: str) -> str:
-        """Generate URL-friendly slug from title"""
-        # Convert to lowercase and replace spaces with hyphens
-        slug = re.sub(r'[^\w\s-]', '', title.lower())
-        slug = re.sub(r'[-\s]+', '-', slug)
-        slug = slug.strip('-')
-        
-        # Ensure uniqueness
-        base_slug = slug
-        counter = 1
-        while self.db.query(BlogPost).filter(BlogPost.slug == slug).first():
-            slug = f"{base_slug}-{counter}"
-            counter += 1
-        
-        return slug
-    
-    # Blog Category Methods
-    def create_category(self, category_create: BlogCategoryCreate) -> BlogCategory:
-        """Create a new blog category"""
-        # Check if category name already exists
-        existing_category = self.db.query(BlogCategory).filter(
-            BlogCategory.name == category_create.name
-        ).first()
-        
-        if existing_category:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Category name already exists"
-            )
-        
-        db_category = BlogCategory(
-            name=category_create.name,
-            description=category_create.description
-        )
-        
-        self.db.add(db_category)
-        self.db.commit()
-        self.db.refresh(db_category)
-        
-        return db_category
-    
-    def get_categories(self, skip: int = 0, limit: int = 100, search: Optional[str] = None) -> List[BlogCategory]:
-        """Get all blog categories"""
-        query = self.db.query(BlogCategory)
-        
-        if search:
-            query = query.filter(BlogCategory.name.ilike(f"%{search}%"))
-        
-        return query.offset(skip).limit(limit).all()
-    
-    def get_category_by_id(self, category_id: int) -> Optional[BlogCategory]:
-        """Get category by ID"""
-        return self.db.query(BlogCategory).filter(BlogCategory.id == category_id).first()
-    
-    def update_category(self, category_id: int, category_update: BlogCategoryUpdate) -> BlogCategory:
-        """Update blog category"""
-        category = self.get_category_by_id(category_id)
-        if not category:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Category not found"
-            )
-        
-        # Check name uniqueness if name is being updated
-        if category_update.name and category_update.name != category.name:
-            existing_category = self.db.query(BlogCategory).filter(
-                BlogCategory.name == category_update.name
-            ).first()
-            if existing_category:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Category name already exists"
-                )
-        
-        update_data = category_update.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(category, field, value)
-        
-        category.updated_at = datetime.utcnow()
-        
-        self.db.commit()
-        self.db.refresh(category)
-        
-        return category
-    
-    def delete_category(self, category_id: int) -> bool:
-        """Delete blog category"""
-        category = self.get_category_by_id(category_id)
-        if not category:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Category not found"
-            )
-        
-        # Check if category is being used by any posts
-        posts_count = self.db.query(BlogPost).filter(BlogPost.category_id == category_id).count()
-        if posts_count > 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot delete category. It is used by {posts_count} blog posts"
-            )
-        
-        self.db.delete(category)
-        self.db.commit()
-        
-        return True
-    
-    # Blog Tag Methods
-    def create_tag(self, tag_create: BlogTagCreate) -> BlogTag:
-        """Create a new blog tag"""
-        # Check if tag name already exists
-        existing_tag = self.db.query(BlogTag).filter(
-            BlogTag.name == tag_create.name
-        ).first()
-        
-        if existing_tag:
-            return existing_tag  # Return existing tag instead of creating duplicate
-        
-        db_tag = BlogTag(name=tag_create.name)
-        
-        self.db.add(db_tag)
-        self.db.commit()
-        self.db.refresh(db_tag)
-        
-        return db_tag
-    
-    def get_tags(self, skip: int = 0, limit: int = 100) -> List[BlogTag]:
-        """Get all blog tags"""
-        return self.db.query(BlogTag).offset(skip).limit(limit).all()
-    
-    def get_blog_tags(self, skip: int = 0, limit: int = 100, search: Optional[str] = None) -> List[BlogTag]:
-        """Get blog tags with optional search"""
-        query = self.db.query(BlogTag)
-        
-        if search:
-            search_term = f"%{search}%"
-            query = query.filter(BlogTag.name.ilike(search_term))
-        
-        return query.offset(skip).limit(limit).all()
-    
-    def get_tag_by_id(self, tag_id: int) -> Optional[BlogTag]:
-        """Get tag by ID"""
-        return self.db.query(BlogTag).filter(BlogTag.id == tag_id).first()
-    
-    def get_tag_by_name(self, name: str) -> Optional[BlogTag]:
-        """Get tag by name"""
-        return self.db.query(BlogTag).filter(BlogTag.name == name).first()
-    
-    def update_tag(self, tag_id: int, tag_update: BlogTagUpdate) -> BlogTag:
-        """Update blog tag"""
-        tag = self.get_tag_by_id(tag_id)
-        if not tag:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Tag not found"
-            )
-        
-        # Check name uniqueness if name is being updated
-        if tag_update.name and tag_update.name != tag.name:
-            existing_tag = self.db.query(BlogTag).filter(
-                BlogTag.name == tag_update.name
-            ).first()
-            if existing_tag:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Tag name already exists"
-                )
-        
-        update_data = tag_update.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(tag, field, value)
-        
-        tag.updated_at = datetime.utcnow()
-        
-        self.db.commit()
-        self.db.refresh(tag)
-        
-        return tag
-    
-    def delete_tag(self, tag_id: int) -> bool:
-        """Delete blog tag"""
-        tag = self.get_tag_by_id(tag_id)
-        if not tag:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Tag not found"
-            )
-        
-        self.db.delete(tag)
-        self.db.commit()
-        
-        return True
-    
     # Blog Post Methods
-    def create_post(self, post_create: BlogPostCreate, author_id: int) -> BlogPost:
+    def create_post(self, post_create: BlogPostCreate, author_id: UUID) -> BlogPost:
         """Create a new blog post"""
         # Generate slug from title
-        slug = self._generate_slug(post_create.title)
+        slug = generate_slug(post_create.title)
         
-        # Create blog post
-        db_post = BlogPost(
-            title=post_create.title,
-            content=post_create.content,
-            excerpt=post_create.excerpt,
-            featured_image=post_create.featured_image,
-            slug=slug,
-            is_published=post_create.is_published,
-            category_id=post_create.category_id,
-            author_id=author_id,
-            published_at=datetime.utcnow() if post_create.is_published else None
-        )
+        # Ensure slug is unique
+        counter = 1
+        original_slug = slug
+        while self.get_post_by_slug(slug):
+            slug = f"{original_slug}-{counter}"
+            counter += 1
         
-        self.db.add(db_post)
-        self.db.flush()  # Flush to get the ID
+        # Calculate word count and read time
+        word_count = len(post_create.content.split())
+        read_time = calculate_read_time(word_count)
+        
+        # Create post data
+        post_data = {
+            "title": post_create.title,
+            "slug": slug,
+            "content": post_create.content,
+            "excerpt": post_create.excerpt,
+            "featured_image_url": post_create.featured_image,
+            "author_id": author_id,
+            "category_id": post_create.category_id,
+            "word_count": word_count,
+            "read_time_minutes": read_time,
+            "status": "published" if post_create.is_published else "draft"
+        }
+        
+        # Set published_at if publishing
+        if post_create.is_published:
+            post_data["published_at"] = datetime.utcnow()
+        
+        post = BlogPost(**post_data)
+        self.db.add(post)
+        self.db.flush()  # Get the ID without committing
         
         # Add tags if provided
         if post_create.tag_ids:
             for tag_id in post_create.tag_ids:
                 tag = self.get_tag_by_id(tag_id)
                 if tag:
-                    db_post.tags.append(tag)
+                    post.tags.append(tag)
         
         self.db.commit()
-        self.db.refresh(db_post)
+        self.db.refresh(post)
         
-        return db_post
+        return post
     
-    def search_blog_posts(self, search_params: BlogSearchParams, skip: int = 0, limit: int = 10) -> Tuple[List[BlogPost], int]:
-        """Search blog posts with parameters"""
-        return self.get_posts(search_params)
-    
-    def get_posts_for_user(self, user_id: UUID, search_params: BlogSearchParams, skip: int = 0, limit: int = 10) -> List[BlogPost]:
-        """Get posts for authenticated user: their own posts (all) + published posts from others"""
-        query = self.db.query(BlogPost).options(
-            joinedload(BlogPost.author),
-            joinedload(BlogPost.category),
-            joinedload(BlogPost.tags)
-        )
-        
-        # Filter: user's own posts OR published posts from others
-        query = query.filter(
-            or_(
-                BlogPost.author_id == user_id,  # User's own posts (all)
-                BlogPost.is_published == True   # Published posts from others
-            )
-        )
-        
-        # Apply search filters
-        if search_params.q:
-            search_term = f"%{search_params.q}%"
-            query = query.filter(
-                or_(
-                    BlogPost.title.ilike(search_term),
-                    BlogPost.content.ilike(search_term),
-                    BlogPost.excerpt.ilike(search_term)
-                )
-            )
-        
-        if search_params.category_id:
-            query = query.filter(BlogPost.category_id == search_params.category_id)
-        
-        if search_params.tag_ids:
-            query = query.join(BlogPost.tags).filter(
-                BlogTag.id.in_(search_params.tag_ids)
-            )
-        
-        # Apply additional published filter if specified
-        if search_params.is_published is not None:
-            if search_params.is_published:
-                query = query.filter(BlogPost.is_published == True)
-            else:
-                # For unpublished filter, only show user's own unpublished posts
-                query = query.filter(
-                    and_(
-                        BlogPost.author_id == user_id,
-                        BlogPost.is_published == False
-                    )
-                )
-        
-        # Apply sorting (default to created_at desc)
-        query = query.order_by(desc(BlogPost.created_at))
-        
-        # Apply pagination
-        posts = query.offset(skip).limit(limit).all()
-        
-        return posts
-    
-    def get_posts(self, search_params: BlogSearchParams) -> Tuple[List[BlogPost], int]:
-        """Get blog posts with search and pagination"""
-        query = self.db.query(BlogPost).options(
-            joinedload(BlogPost.author),
-            joinedload(BlogPost.category),
-            joinedload(BlogPost.tags)
-        )
+    def get_posts(
+        self, 
+        skip: int = 0, 
+        limit: int = 10, 
+        status: Optional[str] = None,
+        category_id: Optional[UUID] = None,
+        author_id: Optional[UUID] = None,
+        search: Optional[str] = None,
+        tag_ids: Optional[List[UUID]] = None
+    ) -> Dict[str, Any]:
+        """Get blog posts with filtering and pagination"""
+        query = self.db.query(BlogPost)
         
         # Apply filters
-        if search_params.q:
-            search_term = f"%{search_params.q}%"
+        if status:
+            query = query.filter(BlogPost.status == status)
+        
+        if category_id:
+            query = query.filter(BlogPost.category_id == category_id)
+        
+        if author_id:
+            query = query.filter(BlogPost.author_id == author_id)
+        
+        if search:
+            search_term = f"%{search}%"
             query = query.filter(
                 or_(
                     BlogPost.title.ilike(search_term),
@@ -326,68 +102,133 @@ class BlogService:
                 )
             )
         
-        if search_params.category_id:
-            query = query.filter(BlogPost.category_id == search_params.category_id)
+        if tag_ids:
+            query = query.join(BlogPost.tags).filter(BlogTag.id.in_(tag_ids))
         
-        if search_params.author_id:
-            query = query.filter(BlogPost.author_id == search_params.author_id)
-        
-        if search_params.is_published is not None:
-            if search_params.is_published:
-                query = query.filter(BlogPost.status == "published")
-            else:
-                query = query.filter(BlogPost.status != "published")
-        
-        if search_params.tag_ids:
-            query = query.join(BlogPost.tags).filter(
-                BlogTag.id.in_(search_params.tag_ids)
-            )
-        
-        # Get total count before pagination
+        # Get total count
         total = query.count()
         
-        # Apply sorting
-        if search_params.sort_order == "desc":
-            order_func = desc
-        else:
-            order_func = asc
+        # Apply pagination and ordering
+        posts = query.order_by(desc(BlogPost.created_at)).offset(skip).limit(limit).all()
         
-        if search_params.sort_by == "title":
-            query = query.order_by(order_func(BlogPost.title))
-        elif search_params.sort_by == "view_count":
-            query = query.order_by(order_func(BlogPost.view_count))
-        elif search_params.sort_by == "published_at":
-            query = query.order_by(order_func(BlogPost.published_at))
-        elif search_params.sort_by == "updated_at":
-            query = query.order_by(order_func(BlogPost.updated_at))
-        else:  # default to created_at
-            query = query.order_by(order_func(BlogPost.created_at))
-        
-        # Apply pagination
-        offset = (search_params.page - 1) * search_params.size
-        posts = query.offset(offset).limit(search_params.size).all()
-        
-        return posts, total
+        return {
+            "posts": posts,
+            "total": total,
+            "skip": skip,
+            "limit": limit
+        }
+    
+    def get_published_posts(
+        self, 
+        skip: int = 0, 
+        limit: int = 10,
+        category_id: Optional[UUID] = None,
+        search: Optional[str] = None,
+        tag_ids: Optional[List[UUID]] = None
+    ) -> Dict[str, Any]:
+        """Get published blog posts for public viewing"""
+        return self.get_posts(
+            skip=skip,
+            limit=limit,
+            status="published",
+            category_id=category_id,
+            search=search,
+            tag_ids=tag_ids
+        )
     
     def get_post_by_id(self, post_id: UUID) -> Optional[BlogPost]:
         """Get blog post by ID"""
-        return self.db.query(BlogPost).options(
-            joinedload(BlogPost.author),
-            joinedload(BlogPost.category),
-            joinedload(BlogPost.tags)
-        ).filter(BlogPost.id == post_id).first()
-    
-    def get_blog_post_by_id(self, post_id: UUID) -> Optional[BlogPost]:
-        """Get blog post by ID (alias for get_post_by_id)"""
-        return self.get_post_by_id(post_id)
+        return self.db.query(BlogPost).filter(BlogPost.id == post_id).first()
     
     def get_post_by_slug(self, slug: str) -> Optional[BlogPost]:
         """Get blog post by slug"""
-        return self.db.query(BlogPost).options(
-            joinedload(BlogPost.author),
-            joinedload(BlogPost.category),
-            joinedload(BlogPost.tags)
-        ).filter(BlogPost.slug == slug).first()
+        return self.db.query(BlogPost).filter(BlogPost.slug == slug).first()
+    
+    def get_published_post_by_slug(self, slug: str) -> Optional[BlogPost]:
+        """Get published blog post by slug"""
+        return self.db.query(BlogPost).filter(
+            and_(BlogPost.slug == slug, BlogPost.status == "published")
+        ).first()
+    
+    def increment_view_count(self, post_id: UUID) -> bool:
+        """Increment view count for a blog post"""
+        post = self.get_post_by_id(post_id)
+        if post:
+            post.view_count += 1
+            self.db.commit()
+            return True
+        return False
+    
+    def search_posts(self, search_params: BlogSearchParams) -> Dict[str, Any]:
+        """Advanced search for blog posts"""
+        query = self.db.query(BlogPost)
+        
+        # Text search
+        if search_params.query:
+            search_term = f"%{search_params.query}%"
+            query = query.filter(
+                or_(
+                    BlogPost.title.ilike(search_term),
+                    BlogPost.content.ilike(search_term),
+                    BlogPost.excerpt.ilike(search_term)
+                )
+            )
+        
+        # Category filter
+        if search_params.category_id:
+            query = query.filter(BlogPost.category_id == search_params.category_id)
+        
+        # Author filter
+        if search_params.author_id:
+            query = query.filter(BlogPost.author_id == search_params.author_id)
+        
+        # Status filter
+        if search_params.status:
+            query = query.filter(BlogPost.status == search_params.status)
+        
+        # Tag filters
+        if search_params.tag_ids:
+            query = query.join(BlogPost.tags).filter(BlogTag.id.in_(search_params.tag_ids))
+        
+        # Date range filters
+        if search_params.date_from:
+            query = query.filter(BlogPost.created_at >= search_params.date_from)
+        
+        if search_params.date_to:
+            query = query.filter(BlogPost.created_at <= search_params.date_to)
+        
+        # Get total count
+        total = query.count()
+        
+        # Apply sorting
+        if search_params.sort_by == "title":
+            if search_params.sort_order == "desc":
+                query = query.order_by(desc(BlogPost.title))
+            else:
+                query = query.order_by(BlogPost.title)
+        elif search_params.sort_by == "created_at":
+            if search_params.sort_order == "desc":
+                query = query.order_by(desc(BlogPost.created_at))
+            else:
+                query = query.order_by(BlogPost.created_at)
+        elif search_params.sort_by == "view_count":
+            if search_params.sort_order == "desc":
+                query = query.order_by(desc(BlogPost.view_count))
+            else:
+                query = query.order_by(BlogPost.view_count)
+        else:
+            # Default sorting
+            query = query.order_by(desc(BlogPost.created_at))
+        
+        # Apply pagination
+        posts = query.offset(search_params.skip).limit(search_params.limit).all()
+        
+        return {
+            "posts": posts,
+            "total": total,
+            "skip": search_params.skip,
+            "limit": search_params.limit
+        }
     
     def update_post(self, post_id: UUID, post_update: BlogPostUpdate, user_id: UUID) -> BlogPost:
         """Update blog post"""
@@ -398,38 +239,70 @@ class BlogService:
                 detail="Blog post not found"
             )
         
-        # Check if user is the author or admin
-        if post.author_id != user_id:
-            # TODO: Add admin role check
+        # Check if user can update this post
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        # Only author or admin/instructor can update
+        if post.author_id != user_id and user.role not in [UserRole.ADMIN, UserRole.INSTRUCTOR]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to update this post"
             )
         
+        # Prepare update data
         update_data = post_update.model_dump(exclude_unset=True)
         
-        # Handle title update (regenerate slug if needed)
-        if "title" in update_data and update_data["title"] != post.title:
-            update_data["slug"] = self._generate_slug(update_data["title"])
+        # Handle slug update if title changed
+        if "title" in update_data:
+            new_slug = generate_slug(update_data["title"])
+            # Ensure slug is unique (excluding current post)
+            counter = 1
+            original_slug = new_slug
+            while True:
+                existing_post = self.get_post_by_slug(new_slug)
+                if not existing_post or existing_post.id == post_id:
+                    break
+                new_slug = f"{original_slug}-{counter}"
+                counter += 1
+            update_data["slug"] = new_slug
         
-        # Handle publication status
-        if "is_published" in update_data:
-            if update_data["is_published"] and not post.is_published:
-                update_data["published_at"] = datetime.utcnow()
-            elif not update_data["is_published"] and post.is_published:
-                update_data["published_at"] = None
+        # Handle content update (recalculate word count and read time)
+        if "content" in update_data:
+            word_count = len(update_data["content"].split())
+            update_data["word_count"] = word_count
+            update_data["read_time_minutes"] = calculate_read_time(word_count)
         
-        # Handle tags
+        # Handle featured image
+        if "featured_image" in update_data:
+            update_data["featured_image_url"] = update_data.pop("featured_image")
+        
+        # Handle tags update
         if "tag_ids" in update_data:
             tag_ids = update_data.pop("tag_ids")
-            # Clear existing tags
-            post.tags.clear()
-            # Add new tags
-            if tag_ids:
+            if tag_ids is not None:
+                # Clear existing tags
+                post.tags.clear()
+                # Add new tags
                 for tag_id in tag_ids:
                     tag = self.get_tag_by_id(tag_id)
                     if tag:
                         post.tags.append(tag)
+        
+        # Handle is_published separately by updating status
+        if 'is_published' in update_data:
+            is_published = update_data.pop('is_published')
+            if is_published:
+                post.status = "published"
+                if not post.published_at:
+                    post.published_at = datetime.utcnow()
+            else:
+                post.status = "draft"
+                post.published_at = None
         
         # Update other fields
         for field, value in update_data.items():
@@ -451,9 +324,16 @@ class BlogService:
                 detail="Blog post not found"
             )
         
-        # Check if user is the author or admin
-        if post.author_id != user_id:
-            # TODO: Add admin role check
+        # Check if user can delete this post
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        # Only author or admin can delete
+        if post.author_id != user_id and user.role != UserRole.ADMIN:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to delete this post"
@@ -464,83 +344,191 @@ class BlogService:
         
         return True
     
-    def increment_view_count(self, post_id: UUID) -> BlogPost:
-        """Increment view count for a blog post"""
-        post = self.get_post_by_id(post_id)
-        if not post:
+    # Blog Category Methods
+    def create_category(self, category_create: BlogCategoryCreate) -> BlogCategory:
+        """Create a new blog category"""
+        # Generate slug from name
+        slug = generate_slug(category_create.name)
+        
+        # Ensure slug is unique
+        counter = 1
+        original_slug = slug
+        while self.get_category_by_slug(slug):
+            slug = f"{original_slug}-{counter}"
+            counter += 1
+        
+        category = BlogCategory(
+            name=category_create.name,
+            slug=slug,
+            description=category_create.description
+        )
+        
+        self.db.add(category)
+        self.db.commit()
+        self.db.refresh(category)
+        
+        return category
+    
+    def get_categories(self, skip: int = 0, limit: int = 100) -> List[BlogCategory]:
+        """Get all blog categories"""
+        return self.db.query(BlogCategory).offset(skip).limit(limit).all()
+    
+    def get_category_by_id(self, category_id: UUID) -> Optional[BlogCategory]:
+        """Get blog category by ID"""
+        return self.db.query(BlogCategory).filter(BlogCategory.id == category_id).first()
+    
+    def get_category_by_slug(self, slug: str) -> Optional[BlogCategory]:
+        """Get blog category by slug"""
+        return self.db.query(BlogCategory).filter(BlogCategory.slug == slug).first()
+    
+    def update_category(self, category_id: UUID, category_update: BlogCategoryUpdate) -> BlogCategory:
+        """Update blog category"""
+        category = self.get_category_by_id(category_id)
+        if not category:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Blog post not found"
+                detail="Blog category not found"
             )
         
-        post.view_count += 1
+        update_data = category_update.model_dump(exclude_unset=True)
+        
+        # Handle slug update if name changed
+        if "name" in update_data:
+            new_slug = generate_slug(update_data["name"])
+            # Ensure slug is unique (excluding current category)
+            counter = 1
+            original_slug = new_slug
+            while True:
+                existing_category = self.get_category_by_slug(new_slug)
+                if not existing_category or existing_category.id == category_id:
+                    break
+                new_slug = f"{original_slug}-{counter}"
+                counter += 1
+            update_data["slug"] = new_slug
+        
+        for field, value in update_data.items():
+            setattr(category, field, value)
+        
         self.db.commit()
-        self.db.refresh(post)
+        self.db.refresh(category)
         
-        return post
+        return category
     
-    def get_popular_posts(self, limit: int = 10) -> List[BlogPost]:
-        """Get most popular blog posts by view count"""
-        return self.db.query(BlogPost).options(
-            joinedload(BlogPost.author),
-            joinedload(BlogPost.category),
-            joinedload(BlogPost.tags)
-        ).filter(
-            BlogPost.is_published == True
-        ).order_by(
-            desc(BlogPost.view_count)
-        ).limit(limit).all()
-    
-    def get_recent_posts(self, limit: int = 10) -> List[BlogPost]:
-        """Get most recent published blog posts"""
-        return self.db.query(BlogPost).options(
-            joinedload(BlogPost.author),
-            joinedload(BlogPost.category),
-            joinedload(BlogPost.tags)
-        ).filter(
-            BlogPost.is_published == True
-        ).order_by(
-            desc(BlogPost.published_at)
-        ).limit(limit).all()
-    
-    def get_posts_by_author(self, author_id: int, skip: int = 0, limit: int = 10) -> List[BlogPost]:
-        """Get blog posts by specific author"""
-        return self.db.query(BlogPost).options(
-            joinedload(BlogPost.author),
-            joinedload(BlogPost.category),
-            joinedload(BlogPost.tags)
-        ).filter(
-            BlogPost.author_id == author_id
-        ).order_by(
-            desc(BlogPost.created_at)
-        ).offset(skip).limit(limit).all()
-    
-    def get_posts_by_category(self, category_id: int, skip: int = 0, limit: int = 10) -> List[BlogPost]:
-        """Get blog posts by category"""
-        return self.db.query(BlogPost).options(
-            joinedload(BlogPost.author),
-            joinedload(BlogPost.category),
-            joinedload(BlogPost.tags)
-        ).filter(
-            and_(
-                BlogPost.category_id == category_id,
-                BlogPost.is_published == True
+    def delete_category(self, category_id: UUID) -> bool:
+        """Delete blog category"""
+        category = self.get_category_by_id(category_id)
+        if not category:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Blog category not found"
             )
-        ).order_by(
-            desc(BlogPost.published_at)
-        ).offset(skip).limit(limit).all()
-    
-    def get_posts_by_tag(self, tag_id: int, skip: int = 0, limit: int = 10) -> List[BlogPost]:
-        """Get blog posts by tag"""
-        return self.db.query(BlogPost).options(
-            joinedload(BlogPost.author),
-            joinedload(BlogPost.category),
-            joinedload(BlogPost.tags)
-        ).join(BlogPost.tags).filter(
-            and_(
-                BlogTag.id == tag_id,
-                BlogPost.is_published == True
+        
+        # Check if category has posts
+        posts_count = self.db.query(BlogPost).filter(BlogPost.category_id == category_id).count()
+        if posts_count > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete category with existing posts"
             )
-        ).order_by(
-            desc(BlogPost.published_at)
-        ).offset(skip).limit(limit).all()
+        
+        self.db.delete(category)
+        self.db.commit()
+        
+        return True
+    
+    # Blog Tag Methods
+    def create_tag(self, tag_create: BlogTagCreate) -> BlogTag:
+        """Create a new blog tag"""
+        # Check if tag already exists
+        existing_tag = self.db.query(BlogTag).filter(BlogTag.name == tag_create.name.lower()).first()
+        if existing_tag:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Tag already exists"
+            )
+        
+        tag = BlogTag(name=tag_create.name.lower())
+        
+        self.db.add(tag)
+        self.db.commit()
+        self.db.refresh(tag)
+        
+        return tag
+    
+    def get_tags(self, skip: int = 0, limit: int = 100) -> List[BlogTag]:
+        """Get all blog tags"""
+        return self.db.query(BlogTag).offset(skip).limit(limit).all()
+    
+    def get_tag_by_id(self, tag_id: UUID) -> Optional[BlogTag]:
+        """Get blog tag by ID"""
+        return self.db.query(BlogTag).filter(BlogTag.id == tag_id).first()
+    
+    def get_tag_by_name(self, name: str) -> Optional[BlogTag]:
+        """Get blog tag by name"""
+        return self.db.query(BlogTag).filter(BlogTag.name == name.lower()).first()
+    
+    def update_tag(self, tag_id: UUID, tag_update: BlogTagUpdate) -> BlogTag:
+        """Update blog tag"""
+        tag = self.get_tag_by_id(tag_id)
+        if not tag:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Blog tag not found"
+            )
+        
+        update_data = tag_update.model_dump(exclude_unset=True)
+        
+        # Check if new name already exists (excluding current tag)
+        if "name" in update_data:
+            existing_tag = self.get_tag_by_name(update_data["name"])
+            if existing_tag and existing_tag.id != tag_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Tag name already exists"
+                )
+        
+        for field, value in update_data.items():
+            setattr(tag, field, value)
+        
+        self.db.commit()
+        self.db.refresh(tag)
+        
+        return tag
+    
+    def delete_tag(self, tag_id: UUID) -> bool:
+        """Delete blog tag"""
+        tag = self.get_tag_by_id(tag_id)
+        if not tag:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Blog tag not found"
+            )
+        
+        self.db.delete(tag)
+        self.db.commit()
+        
+        return True
+    
+    def get_popular_tags(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get popular tags based on usage count"""
+        result = (
+            self.db.query(
+                BlogTag.id,
+                BlogTag.name,
+                func.count(blog_post_tags.c.post_id).label("usage_count")
+            )
+            .join(blog_post_tags, BlogTag.id == blog_post_tags.c.tag_id)
+            .group_by(BlogTag.id, BlogTag.name)
+            .order_by(desc(func.count(blog_post_tags.c.post_id)))
+            .limit(limit)
+            .all()
+        )
+        
+        return [
+            {
+                "id": row.id,
+                "name": row.name,
+                "usage_count": row.usage_count
+            }
+            for row in result
+        ]
