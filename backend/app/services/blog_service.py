@@ -1,4 +1,5 @@
 from typing import Optional, List, Tuple
+from uuid import UUID
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, and_, desc, asc, func
 from fastapi import HTTPException, status
@@ -250,6 +251,62 @@ class BlogService:
         """Search blog posts with parameters"""
         return self.get_posts(search_params)
     
+    def get_posts_for_user(self, user_id: UUID, search_params: BlogSearchParams, skip: int = 0, limit: int = 10) -> List[BlogPost]:
+        """Get posts for authenticated user: their own posts (all) + published posts from others"""
+        query = self.db.query(BlogPost).options(
+            joinedload(BlogPost.author),
+            joinedload(BlogPost.category),
+            joinedload(BlogPost.tags)
+        )
+        
+        # Filter: user's own posts OR published posts from others
+        query = query.filter(
+            or_(
+                BlogPost.author_id == user_id,  # User's own posts (all)
+                BlogPost.is_published == True   # Published posts from others
+            )
+        )
+        
+        # Apply search filters
+        if search_params.q:
+            search_term = f"%{search_params.q}%"
+            query = query.filter(
+                or_(
+                    BlogPost.title.ilike(search_term),
+                    BlogPost.content.ilike(search_term),
+                    BlogPost.excerpt.ilike(search_term)
+                )
+            )
+        
+        if search_params.category_id:
+            query = query.filter(BlogPost.category_id == search_params.category_id)
+        
+        if search_params.tag_ids:
+            query = query.join(BlogPost.tags).filter(
+                BlogTag.id.in_(search_params.tag_ids)
+            )
+        
+        # Apply additional published filter if specified
+        if search_params.is_published is not None:
+            if search_params.is_published:
+                query = query.filter(BlogPost.is_published == True)
+            else:
+                # For unpublished filter, only show user's own unpublished posts
+                query = query.filter(
+                    and_(
+                        BlogPost.author_id == user_id,
+                        BlogPost.is_published == False
+                    )
+                )
+        
+        # Apply sorting (default to created_at desc)
+        query = query.order_by(desc(BlogPost.created_at))
+        
+        # Apply pagination
+        posts = query.offset(skip).limit(limit).all()
+        
+        return posts
+    
     def get_posts(self, search_params: BlogSearchParams) -> Tuple[List[BlogPost], int]:
         """Get blog posts with search and pagination"""
         query = self.db.query(BlogPost).options(
@@ -276,7 +333,10 @@ class BlogService:
             query = query.filter(BlogPost.author_id == search_params.author_id)
         
         if search_params.is_published is not None:
-            query = query.filter(BlogPost.is_published == search_params.is_published)
+            if search_params.is_published:
+                query = query.filter(BlogPost.status == "published")
+            else:
+                query = query.filter(BlogPost.status != "published")
         
         if search_params.tag_ids:
             query = query.join(BlogPost.tags).filter(
@@ -309,13 +369,17 @@ class BlogService:
         
         return posts, total
     
-    def get_post_by_id(self, post_id: int) -> Optional[BlogPost]:
+    def get_post_by_id(self, post_id: UUID) -> Optional[BlogPost]:
         """Get blog post by ID"""
         return self.db.query(BlogPost).options(
             joinedload(BlogPost.author),
             joinedload(BlogPost.category),
             joinedload(BlogPost.tags)
         ).filter(BlogPost.id == post_id).first()
+    
+    def get_blog_post_by_id(self, post_id: UUID) -> Optional[BlogPost]:
+        """Get blog post by ID (alias for get_post_by_id)"""
+        return self.get_post_by_id(post_id)
     
     def get_post_by_slug(self, slug: str) -> Optional[BlogPost]:
         """Get blog post by slug"""
@@ -325,7 +389,7 @@ class BlogService:
             joinedload(BlogPost.tags)
         ).filter(BlogPost.slug == slug).first()
     
-    def update_post(self, post_id: int, post_update: BlogPostUpdate, user_id: int) -> BlogPost:
+    def update_post(self, post_id: UUID, post_update: BlogPostUpdate, user_id: UUID) -> BlogPost:
         """Update blog post"""
         post = self.get_post_by_id(post_id)
         if not post:
@@ -378,7 +442,7 @@ class BlogService:
         
         return post
     
-    def delete_post(self, post_id: int, user_id: int) -> bool:
+    def delete_post(self, post_id: UUID, user_id: UUID) -> bool:
         """Delete blog post"""
         post = self.get_post_by_id(post_id)
         if not post:
@@ -400,7 +464,7 @@ class BlogService:
         
         return True
     
-    def increment_view_count(self, post_id: int) -> BlogPost:
+    def increment_view_count(self, post_id: UUID) -> BlogPost:
         """Increment view count for a blog post"""
         post = self.get_post_by_id(post_id)
         if not post:

@@ -1,6 +1,8 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey, Table
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+import uuid
 from ..core.database import Base
 
 
@@ -8,15 +10,15 @@ from ..core.database import Base
 blog_post_tags = Table(
     'blog_post_tags',
     Base.metadata,
-    Column('blog_post_id', Integer, ForeignKey('blog_posts.id'), primary_key=True),
-    Column('blog_tag_id', Integer, ForeignKey('blog_tags.id'), primary_key=True)
+    Column('post_id', UUID(as_uuid=True), ForeignKey('blog_posts.id'), primary_key=True),
+    Column('tag_id', UUID(as_uuid=True), ForeignKey('blog_tags.id'), primary_key=True)
 )
 
 
 class BlogCategory(Base):
     __tablename__ = "blog_categories"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     name = Column(String(100), unique=True, nullable=False)
     description = Column(Text, nullable=True)
     slug = Column(String(100), unique=True, nullable=False)
@@ -33,9 +35,9 @@ class BlogCategory(Base):
 class BlogTag(Base):
     __tablename__ = "blog_tags"
     
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(50), unique=True, nullable=False)
-    slug = Column(String(50), unique=True, nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    name = Column(String(100), unique=True, nullable=False)
+    color = Column(String(7), default='#3B82F6', nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
@@ -48,23 +50,23 @@ class BlogTag(Base):
 class BlogPost(Base):
     __tablename__ = "blog_posts"
     
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(255), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    title = Column(String(500), nullable=False)
+    slug = Column(String(500), unique=True, nullable=False)
     content = Column(Text, nullable=False)
     excerpt = Column(Text, nullable=True)
-    slug = Column(String(255), unique=True, nullable=False)
-    featured_image = Column(String(500), nullable=True)
     status = Column(String(20), default="draft", nullable=False)  # draft, published, archived
-    is_featured = Column(Boolean, default=False, nullable=False)
     view_count = Column(Integer, default=0, nullable=False)
-    reading_time = Column(Integer, nullable=True)  # in minutes
+    word_count = Column(Integer, default=0, nullable=False)
+    read_time_minutes = Column(Integer, default=0, nullable=False)
+    featured_image_url = Column(String(500), nullable=True)
     published_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Foreign Keys
-    author_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    category_id = Column(Integer, ForeignKey("blog_categories.id"), nullable=True)
+    author_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    category_id = Column(UUID(as_uuid=True), ForeignKey("blog_categories.id"), nullable=True)
     
     # Relationships
     author = relationship("User", back_populates="blog_posts")

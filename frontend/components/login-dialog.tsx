@@ -45,15 +45,15 @@ export function LoginDialog({ open, onOpenChange, onLogin }: LoginDialogProps) {
       localStorage.setItem('access_token', response.access_token)
       
       const userData = await apiClient.getCurrentUser()
-      onLogin(userData)
+      onLogin(userData as User)
       onOpenChange(false)
       
       // Reset form
       setEmail("")
       setPassword("")
       setActiveTab("login")
-    } catch (error: any) {
-      setError(error.message || "Login failed")
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Login failed")
     } finally {
       setLoading(false)
     }
@@ -81,7 +81,7 @@ export function LoginDialog({ open, onOpenChange, onLogin }: LoginDialogProps) {
       localStorage.setItem('access_token', response.access_token)
       
       const userData = await apiClient.getCurrentUser()
-      onLogin(userData)
+      onLogin(userData as User)
       onOpenChange(false)
       
       // Reset form
@@ -90,8 +90,8 @@ export function LoginDialog({ open, onOpenChange, onLogin }: LoginDialogProps) {
       setFullName("")
       setConfirmPassword("")
       setActiveTab("login")
-    } catch (error: any) {
-      setError(error.message || "Registration failed")
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Registration failed")
     } finally {
       setLoading(false)
     }

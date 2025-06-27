@@ -5,39 +5,10 @@ import { Header } from "@/components/header"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Edit, Trash2, Eye, Loader2 } from "lucide-react"
+import { Eye, Edit, Trash2, Plus, Loader2 } from "lucide-react"
 import { BlogEditor } from "@/components/blog-editor"
-import { apiClient } from "@/lib/api-client"
-
-interface BlogPost {
-  id: number
-  title: string
-  content: string
-  author: {
-    id: number
-    full_name: string
-    email: string
-  }
-  created_at: string
-  updated_at: string
-  tags: {
-    id: number
-    name: string
-  }[]
-  category: {
-    id: number
-    name: string
-  }
-  is_published: boolean
-  word_count: number
-}
-
-interface User {
-  id: number
-  email: string
-  full_name: string
-  role: string
-}
+import { apiClient } from "@/lib/api"
+import type { BlogPost, BlogPostData, User } from "@/lib/api"
 
 export default function BlogManagementPage() {
   const [posts, setPosts] = useState<BlogPost[]>([])
@@ -55,11 +26,16 @@ export default function BlogManagementPage() {
         
         // Fetch user data
         const userData = await apiClient.getCurrentUser()
-        setUser(userData)
+        setUser(userData as User)
         
         // Fetch blog posts
         const postsData = await apiClient.getBlogPosts()
-        setPosts(postsData)
+        const posts = Array.isArray(postsData) ? postsData : (postsData as { items?: BlogPost[] }).items || []
+        const postsWithWordCount = posts.map(post => ({
+          ...post,
+          word_count: calculateWordCount(post.content)
+        }))
+        setPosts(postsWithWordCount)
       } catch (err) {
         console.error('Error fetching data:', err)
         setError('Failed to load blog posts')
@@ -95,31 +71,30 @@ export default function BlogManagementPage() {
     setIsEditorOpen(true)
   }
 
-  const handleDeletePost = async (postId: number) => {
+  const calculateWordCount = (content: string): number => {
+    return content.trim().split(/\s+/).filter(word => word.length > 0).length
+  }
+
+  const handleDeletePost = async (postId: string) => {
     try {
       await apiClient.deleteBlogPost(postId)
-      setPosts(posts.filter((p) => p.id !== postId))
-    } catch (err) {
-      console.error('Error deleting post:', err)
-      setError('Failed to delete post')
+      setPosts(posts.filter(post => post.id !== postId))
+    } catch (error) {
+      console.error('Error deleting post:', error)
     }
   }
 
-  const handleSavePost = async (postData: any) => {
+  const handleSavePost = async (postData: BlogPostData) => {
     try {
-      if (editingPost) {
-        // Update existing post
-        const updatedPost = await apiClient.updateBlogPost(editingPost.id, postData)
-        setPosts(posts.map((p) => (p.id === editingPost.id ? updatedPost : p)))
-      } else {
-        // Create new post
-        const newPost = await apiClient.createBlogPost(postData)
-        setPosts([newPost, ...posts])
+      const savedPost = await apiClient.createBlogPost(postData)
+      const postWithWordCount = {
+        ...savedPost,
+        word_count: calculateWordCount(savedPost.content)
       }
+      setPosts([postWithWordCount, ...posts])
       setIsEditorOpen(false)
-    } catch (err) {
-      console.error('Error saving post:', err)
-      setError('Failed to save post')
+    } catch (error) {
+      console.error('Error saving post:', error)
     }
   }
 
@@ -139,14 +114,8 @@ export default function BlogManagementPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Header />
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-center py-12">
-            <p className="text-red-600 mb-4">{error}</p>
-            <Button onClick={() => window.location.reload()}>Try Again</Button>
-          </div>
-        </div>
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center text-red-600">{error}</div>
       </div>
     )
   }
@@ -181,16 +150,16 @@ export default function BlogManagementPage() {
                     <div className="flex-1">
                       <CardTitle className="text-xl mb-2">{post.title}</CardTitle>
                       <div className="flex items-center space-x-4 text-sm text-gray-500 mb-3">
-                        <span>By {post.author.full_name}</span>
+                        <span>By {post.author?.full_name || 'Unknown Author'}</span>
                         <span>{formatDate(post.created_at)}</span>
                         <Badge variant={post.is_published ? "default" : "secondary"}>
                           {post.is_published ? "published" : "draft"}
                         </Badge>
-                        <span>{post.word_count} words</span>
-                        <span>{calculateReadTime(post.word_count)}</span>
+                        <span>{post.word_count || 0} words</span>
+                        <span>{calculateReadTime(post.word_count || 0)}</span>
                       </div>
                       <div className="flex flex-wrap gap-2 mb-3">
-                        <Badge variant="outline">{post.category.name}</Badge>
+                        {post.category && <Badge variant="outline">{post.category.name}</Badge>}
                         {post.tags.map((tag) => (
                           <Badge key={tag.id} variant="secondary" className="text-xs">
                             #{tag.name}
@@ -206,7 +175,7 @@ export default function BlogManagementPage() {
                       <Button variant="ghost" size="sm" onClick={() => handleEditPost(post)}>
                         <Edit className="w-4 h-4" />
                       </Button>
-                      {(user?.role === "admin" || post.author.id === user?.id) && (
+                      {(user?.role === "admin" || post.author?.id === user?.id) && (
                         <Button variant="ghost" size="sm" onClick={() => handleDeletePost(post.id)}>
                           <Trash2 className="w-4 h-4" />
                         </Button>

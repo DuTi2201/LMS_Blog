@@ -75,32 +75,25 @@ class AuthService:
         
         return db_user
     
-    def authenticate_user(self, user_login: UserLogin) -> Optional[User]:
+    def authenticate_user(self, identifier: str, password: str) -> Optional[User]:
         """Authenticate user with username/email and password"""
-        user = self.get_user_by_email_or_username(user_login.username)
-        
-        if not user:
+        user = self.get_user_by_email_or_username(identifier)
+
+        if not user or not verify_password(password, user.hashed_password):
             return None
-        
+
         if not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User account is deactivated"
             )
         
-        if not verify_password(user_login.password, user.hashed_password):
-            return None
-        
         return user
     
     def create_tokens(self, user: User) -> dict:
         """Create access and refresh tokens for user"""
-        access_token = create_access_token(
-            data={"sub": str(user.id), "type": "access"}
-        )
-        refresh_token = create_refresh_token(
-            data={"sub": str(user.id), "type": "refresh"}
-        )
+        access_token = create_access_token(subject=user.id)
+        refresh_token = create_refresh_token(subject=user.id)
         
         return {
             "access_token": access_token,

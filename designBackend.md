@@ -571,4 +571,17 @@ async def health_check(db: Session = Depends(get_db)):
 ```
 
 Hệ thống backend này được thiết kế để hỗ trợ đầy đủ các chức năng của frontend hiện tại, với khả năng mở rộng và bảo mật cao, phù hợp cho việc phát triển một LMS hoàn chỉnh.
-        
+        ##  Admin Account
+- Email: admin@lms.com
+- Username: admin
+- Password: admin123
+- Role: admin
+- Quyền: Quản trị viên có quyền truy cập đầy đủ
+## 👤 User Account
+- Email: user@lms.com
+- Username: testuser
+- Password: user123
+- Role: user
+- Quyền: Người dùng thông thường
+
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000

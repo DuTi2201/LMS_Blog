@@ -3,28 +3,10 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Clock, BookOpen, ChevronRight } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Calendar, Clock, Search, Filter, BookOpen, ChevronRight } from "lucide-react"
 import Link from "next/link"
-import { apiClient } from "@/lib/api"
-
-interface BlogPost {
-  id: number
-  title: string
-  content: string
-  excerpt: string
-  created_at: string
-  updated_at: string
-  published: boolean
-  author_id: number
-  category?: {
-    id: number
-    name: string
-  }
-  tags: {
-    id: number
-    name: string
-  }[]
-}
+import { apiClient, BlogPost } from "@/lib/api"
 
 const gradients = [
   "from-blue-400 to-purple-600",
@@ -36,25 +18,35 @@ const gradients = [
 ]
 
 export function BlogList() {
-  const [blogPosts, setBlogPosts] = useState<BlogPost[]>([])
+  const [searchTerm, setSearchTerm] = useState("")
+  const [selectedCategory, setSelectedCategory] = useState("All")
+  const [posts, setPosts] = useState<BlogPost[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [categories, setCategories] = useState<string[]>(["All"])
 
   useEffect(() => {
-    const fetchBlogPosts = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true)
-        const response = await apiClient.getBlogPosts(0, 10)
-        setBlogPosts(response.items || response)
+        const [postsData, categoriesData] = await Promise.all([
+          apiClient.getBlogPosts(0, 50),
+          apiClient.getBlogCategories()
+        ])
+        
+        setPosts(postsData)
+        
+        // Extract unique categories
+        const uniqueCategories = ["All", ...categoriesData.map(cat => cat.name)]
+        setCategories(uniqueCategories)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch blog posts')
-        console.error('Error fetching blog posts:', err)
       } finally {
         setLoading(false)
       }
     }
 
-    fetchBlogPosts()
+    fetchData()
   }, [])
 
   const formatDate = (dateString: string) => {
@@ -105,7 +97,17 @@ export function BlogList() {
     )
   }
 
-  if (blogPosts.length === 0) {
+  // Filter posts based on search term and category
+  const filteredPosts = posts.filter(post => {
+    const matchesSearch = post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         post.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (post.excerpt && post.excerpt.toLowerCase().includes(searchTerm.toLowerCase()))
+    const matchesCategory = selectedCategory === "All" || 
+                           (post.category && post.category.name === selectedCategory)
+    return matchesSearch && matchesCategory
+  })
+
+  if (filteredPosts.length === 0) {
     return (
       <div className="text-center py-8">
         <p className="text-gray-600">No blog posts found.</p>
@@ -115,7 +117,34 @@ export function BlogList() {
 
   return (
     <div className="space-y-6">
-      {blogPosts.map((post, index) => (
+      {/* Search and Filter Controls */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
+            placeholder="Search posts..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-gray-400" />
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {categories.map(category => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {filteredPosts.map((post, index) => (
         <Card key={post.id} className="overflow-hidden hover:shadow-lg transition-shadow">
           <CardContent className="p-0">
             <div className="flex">
@@ -123,17 +152,19 @@ export function BlogList() {
               <div className="flex-1 p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
-                    <div className="flex items-center space-x-4 text-sm text-gray-500 mb-2">
-                      <div className="flex items-center space-x-1">
-                        <Calendar className="w-4 h-4" />
+                    <div className="flex items-center gap-4 text-sm text-gray-500 mb-3">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-4 w-4" />
                         <span>{formatDate(post.created_at)}</span>
                       </div>
-                      {post.category && (
-                        <div className="flex items-center space-x-1">
-                          <BookOpen className="w-4 h-4" />
-                          <span>{post.category.name}</span>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-4 w-4" />
+                        <span>{calculateReadTime(post.content)}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <BookOpen className="h-4 w-4" />
+                        <span>{post.category?.name || 'Uncategorized'}</span>
+                      </div>
                     </div>
 
                     <Link href={`/blog/${post.id}`}>
@@ -150,14 +181,15 @@ export function BlogList() {
                       ))}
                     </div>
 
-                    <p className="text-gray-600 mb-4">{post.excerpt || post.content.substring(0, 200) + '...'}</p>
+                    <p className="text-gray-600 mb-4">{post.excerpt || post.content.substring(0, 150)}...</p>
 
                     <div className="flex items-center space-x-4 text-sm text-gray-500">
-                      <span>{post.content.split(' ').length} words</span>
-                      <div className="flex items-center space-x-1">
-                        <Clock className="w-4 h-4" />
-                        <span>{calculateReadTime(post.content)}</span>
-                      </div>
+                      <span>By {post.author?.full_name || 'Anonymous'}</span>
+                      {post.is_published ? (
+                        <Badge variant="default" className="text-xs">Published</Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-xs">Draft</Badge>
+                      )}
                     </div>
                   </div>
 

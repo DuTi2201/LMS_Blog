@@ -6,18 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Github } from "lucide-react"
 import Image from "next/image"
-import { apiClient } from "@/lib/api"
-
-interface Category {
-  id: number
-  name: string
-  description?: string
-}
-
-interface Tag {
-  id: number
-  name: string
-}
+import { apiClient, Category, Tag } from "@/lib/api"
 
 export function Sidebar() {
   const [categories, setCategories] = useState<Category[]>([])
@@ -31,8 +20,8 @@ export function Sidebar() {
           apiClient.getBlogCategories(),
           apiClient.getBlogTags()
         ])
-        setCategories(categoriesResponse.items || categoriesResponse || [])
-        setTags(tagsResponse.items || tagsResponse || [])
+        setCategories(categoriesResponse)
+        setTags(tagsResponse)
       } catch (error) {
         console.error('Error fetching sidebar data:', error)
         // Set empty arrays as fallback

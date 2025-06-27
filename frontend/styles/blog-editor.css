@@ -1,0 +1,247 @@
+/* Enhanced Blog Editor Styles */
+
+/* MDEditor Container */
+.w-md-editor {
+  background-color: #fafafa !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Toolbar Styling */
+.w-md-editor-toolbar {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  padding: 12px 16px !important;
+}
+
+.w-md-editor-toolbar-child {
+  background: transparent !important;
+}
+
+/* Toolbar Buttons */
+.w-md-editor-toolbar button {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 6px !important;
+  color: white !important;
+  margin: 0 2px !important;
+  padding: 6px 8px !important;
+  transition: all 0.2s ease !important;
+}
+
+.w-md-editor-toolbar button:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.w-md-editor-toolbar button:active {
+  transform: translateY(0) !important;
+}
+
+/* Custom Command Buttons */
+.w-md-editor-toolbar button[aria-label*="Align"],
+.w-md-editor-toolbar button[aria-label*="Underline"],
+.w-md-editor-toolbar button[aria-label*="table"],
+.w-md-editor-toolbar button[aria-label*="math"],
+.w-md-editor-toolbar button[aria-label*="color"] {
+  background: rgba(59, 130, 246, 0.1) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+.w-md-editor-toolbar button[aria-label*="Align"]:hover,
+.w-md-editor-toolbar button[aria-label*="Underline"]:hover,
+.w-md-editor-toolbar button[aria-label*="table"]:hover,
+.w-md-editor-toolbar button[aria-label*="math"]:hover,
+.w-md-editor-toolbar button[aria-label*="color"]:hover {
+  background: rgba(59, 130, 246, 0.2) !important;
+  border-color: rgba(59, 130, 246, 0.4) !important;
+}
+
+/* Editor Text Area */
+.w-md-editor-text-textarea {
+  background-color: #ffffff !important;
+  border: none !important;
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 15px !important;
+  line-height: 1.7 !important;
+  padding: 20px !important;
+  color: #374151 !important;
+}
+
+.w-md-editor-text-textarea:focus {
+  outline: none !important;
+  box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Preview Area */
+.w-md-editor-preview {
+  background-color: #ffffff !important;
+  padding: 20px !important;
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+/* Markdown Content Styling */
+.w-md-editor-preview h1,
+.w-md-editor-preview h2,
+.w-md-editor-preview h3,
+.w-md-editor-preview h4,
+.w-md-editor-preview h5,
+.w-md-editor-preview h6 {
+  color: #1f2937 !important;
+  font-weight: 600 !important;
+  margin-top: 1.5em !important;
+  margin-bottom: 0.5em !important;
+}
+
+.w-md-editor-preview p {
+  color: #374151 !important;
+  line-height: 1.7 !important;
+  margin-bottom: 1em !important;
+}
+
+.w-md-editor-preview table {
+  border-collapse: collapse !important;
+  width: 100% !important;
+  margin: 1em 0 !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+.w-md-editor-preview table th {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: white !important;
+  font-weight: 600 !important;
+  padding: 12px 16px !important;
+  text-align: left !important;
+}
+
+.w-md-editor-preview table td {
+  padding: 12px 16px !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  background-color: #ffffff !important;
+}
+
+.w-md-editor-preview table tr:nth-child(even) td {
+  background-color: #f9fafb !important;
+}
+
+.w-md-editor-preview table tr:hover td {
+  background-color: #f3f4f6 !important;
+}
+
+/* Math Formula Styling */
+.w-md-editor-preview .katex {
+  font-size: 1.1em !important;
+}
+
+.w-md-editor-preview .katex-display {
+  margin: 1.5em 0 !important;
+  padding: 1em !important;
+  background-color: #f8fafc !important;
+  border-radius: 8px !important;
+  border-left: 4px solid #3b82f6 !important;
+}
+
+/* Code Block Styling */
+.w-md-editor-preview pre {
+  background-color: #1f2937 !important;
+  border-radius: 8px !important;
+  padding: 16px !important;
+  margin: 1em 0 !important;
+  overflow-x: auto !important;
+}
+
+.w-md-editor-preview code {
+  background-color: #f3f4f6 !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace !important;
+  font-size: 0.9em !important;
+}
+
+/* Blockquote Styling */
+.w-md-editor-preview blockquote {
+  border-left: 4px solid #3b82f6 !important;
+  background-color: #f8fafc !important;
+  padding: 16px 20px !important;
+  margin: 1em 0 !important;
+  border-radius: 0 8px 8px 0 !important;
+  font-style: italic !important;
+}
+
+/* List Styling */
+.w-md-editor-preview ul,
+.w-md-editor-preview ol {
+  padding-left: 1.5em !important;
+  margin: 1em 0 !important;
+}
+
+.w-md-editor-preview li {
+  margin-bottom: 0.5em !important;
+  line-height: 1.6 !important;
+}
+
+/* Image Styling */
+.w-md-editor-preview img {
+  max-width: 100% !important;
+  height: auto !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+  margin: 1em 0 !important;
+}
+
+/* Link Styling */
+.w-md-editor-preview a {
+  color: #3b82f6 !important;
+  text-decoration: none !important;
+  border-bottom: 1px solid transparent !important;
+  transition: all 0.2s ease !important;
+}
+
+.w-md-editor-preview a:hover {
+  color: #1d4ed8 !important;
+  border-bottom-color: #3b82f6 !important;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .w-md-editor-toolbar {
+    padding: 8px 12px !important;
+  }
+  
+  .w-md-editor-toolbar button {
+    padding: 4px 6px !important;
+    margin: 0 1px !important;
+  }
+  
+  .w-md-editor-text-textarea,
+  .w-md-editor-preview {
+    padding: 16px !important;
+  }
+  
+  .w-md-editor-preview table th,
+  .w-md-editor-preview table td {
+    padding: 8px 12px !important;
+  }
+}
+
+/* Animation for smooth transitions */
+.w-md-editor * {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease !important;
+}
+
+/* Focus states for accessibility */
+.w-md-editor-toolbar button:focus {
+  outline: 2px solid #3b82f6 !important;
+  outline-offset: 2px !important;
+}
+
+.w-md-editor-text-textarea:focus {
+  outline: 2px solid #3b82f6 !important;
+  outline-offset: -2px !important;
+}

@@ -37,7 +37,7 @@ def login(
     auth_service: AuthService = Depends(get_auth_service)
 ):
     """Login user and return access token"""
-    user = auth_service.authenticate_user(user_login.email, user_login.password)
+    user = auth_service.authenticate_user(user_login.username, user_login.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -52,14 +52,7 @@ def login(
         )
     
     # Generate tokens
-    access_token = auth_service.create_access_token(user.id)
-    refresh_token = auth_service.create_refresh_token(user.id)
-    
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer"
-    }
+    return auth_service.create_tokens(user)
 
 
 @router.post("/refresh", response_model=Token)

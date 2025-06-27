@@ -1,6 +1,8 @@
 from typing import Optional
 from pydantic import BaseModel, EmailStr, field_validator
 from datetime import datetime
+from typing import Optional
+from uuid import UUID
 
 
 class UserBase(BaseModel):
@@ -15,8 +17,8 @@ class UserBase(BaseModel):
     @field_validator("role")
     @classmethod
     def validate_role(cls, v):
-        if v not in ["admin", "user"]:
-            raise ValueError("Role must be either 'admin' or 'user'")
+        if v not in ["admin", "user", "instructor"]:
+            raise ValueError("Role must be either 'admin', 'user', or 'instructor'")
         return v
 
 
@@ -44,8 +46,8 @@ class UserUpdate(BaseModel):
     @field_validator("role")
     @classmethod
     def validate_role(cls, v):
-        if v is not None and v not in ["admin", "user"]:
-            raise ValueError("Role must be either 'admin' or 'user'")
+        if v is not None and v not in ["admin", "user", "instructor"]:
+            raise ValueError("Role must be either 'admin', 'user', or 'instructor'")
         return v
     
     @field_validator("password")
@@ -57,7 +59,7 @@ class UserUpdate(BaseModel):
 
 
 class UserResponse(UserBase):
-    id: int
+    id: UUID
     is_verified: bool
     created_at: datetime
     updated_at: datetime

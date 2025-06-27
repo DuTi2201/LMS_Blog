@@ -29,12 +29,12 @@ class LearningService:
         db_course = Course(
             title=course_create.title,
             description=course_create.description,
-            short_description=course_create.short_description,
-            thumbnail_url=course_create.thumbnail_url,
-            difficulty_level=course_create.difficulty_level,
-            estimated_duration=course_create.estimated_duration,
+            short_description=None,
+            thumbnail_url=course_create.featured_image,
+            difficulty_level=course_create.level,
+            estimated_duration=course_create.duration_hours,
             is_published=course_create.is_published,
-            price=course_create.price,
+            price=0.0,
             instructor_id=instructor_id
         )
         

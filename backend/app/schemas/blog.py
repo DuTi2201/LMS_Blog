@@ -1,6 +1,9 @@
 from typing import Optional, List
 from pydantic import BaseModel, field_validator
 from datetime import datetime
+from typing import Optional, List
+from uuid import UUID
+from .user import UserResponse
 
 
 # Blog Category Schemas
@@ -33,7 +36,7 @@ class BlogCategoryUpdate(BaseModel):
 
 
 class BlogCategoryResponse(BlogCategoryBase):
-    id: int
+    id: UUID
     created_at: datetime
     updated_at: datetime
     
@@ -69,7 +72,7 @@ class BlogTagUpdate(BaseModel):
 
 
 class BlogTagResponse(BlogTagBase):
-    id: int
+    id: UUID
     created_at: datetime
     
     class Config:
@@ -83,7 +86,7 @@ class BlogPostBase(BaseModel):
     excerpt: Optional[str] = None
     featured_image: Optional[str] = None
     is_published: bool = False
-    category_id: Optional[int] = None
+    category_id: Optional[UUID] = None
     
     @field_validator("title")
     @classmethod
@@ -101,7 +104,7 @@ class BlogPostBase(BaseModel):
 
 
 class BlogPostCreate(BlogPostBase):
-    tag_ids: Optional[List[int]] = []
+    tag_ids: Optional[List[UUID]] = []
 
 
 class BlogPostUpdate(BaseModel):
@@ -110,8 +113,8 @@ class BlogPostUpdate(BaseModel):
     excerpt: Optional[str] = None
     featured_image: Optional[str] = None
     is_published: Optional[bool] = None
-    category_id: Optional[int] = None
-    tag_ids: Optional[List[int]] = None
+    category_id: Optional[UUID] = None
+    tag_ids: Optional[List[UUID]] = None
     
     @field_validator("title")
     @classmethod
@@ -129,16 +132,16 @@ class BlogPostUpdate(BaseModel):
 
 
 class BlogPostResponse(BlogPostBase):
-    id: int
+    id: UUID
     slug: str
-    author_id: int
+    author_id: UUID
     view_count: int
     created_at: datetime
     updated_at: datetime
     published_at: Optional[datetime] = None
     
     # Related objects
-    author: Optional[dict] = None  # Will be populated with user data
+    author: Optional[UserResponse] = None  # Will be populated with user data
     category: Optional[BlogCategoryResponse] = None
     tags: List[BlogTagResponse] = []
     
@@ -158,9 +161,9 @@ class BlogPostListResponse(BaseModel):
 # Blog Search Schema
 class BlogSearchParams(BaseModel):
     q: Optional[str] = None  # Search query
-    category_id: Optional[int] = None
-    tag_ids: Optional[List[int]] = None
-    author_id: Optional[int] = None
+    category_id: Optional[UUID] = None
+    tag_ids: Optional[List[UUID]] = None
+    author_id: Optional[UUID] = None
     is_published: Optional[bool] = None
     page: int = 1
     size: int = 10

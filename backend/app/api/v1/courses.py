@@ -32,7 +32,7 @@ def get_courses(
 ):
     """Get list of courses with filtering and search"""
     # If user is not authenticated or not admin/instructor, only show published courses
-    if not current_user or current_user.role == UserRole.STUDENT:
+    if not current_user or current_user.role == UserRole.USER:
         is_published = True
     
     search_params = CourseSearchParams(
@@ -58,7 +58,7 @@ def get_my_courses(
     learning_service: LearningService = Depends(get_learning_service)
 ):
     """Get current user's created courses (for instructors)"""
-    if current_user.role == UserRole.STUDENT:
+    if current_user.role == UserRole.USER:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Students cannot create courses"

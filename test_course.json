@@ -1,0 +1,7 @@
+{
+  "title": "Test Course",
+  "description": "A test course for CRUD testing",
+  "level": "beginner",
+  "duration_hours": 2,
+  "is_published": true
+}

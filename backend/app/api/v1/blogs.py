@@ -1,43 +1,78 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from uuid import UUID
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.orm import Session
-
 from ...core.database import get_db
+from ..deps import get_current_user, get_optional_current_user, get_active_user, get_instructor_user, get_blog_service
+from ...models.user import User, UserRole
 from ...schemas.blog import (
-    BlogPostCreate, BlogPostUpdate, BlogPostResponse,
+    BlogPostCreate, BlogPostUpdate, BlogPostResponse, BlogPostListResponse,
+    BlogCategoryCreate, BlogCategoryResponse, BlogTagCreate, BlogTagResponse,
     BlogSearchParams
 )
 from ...services.blog_service import BlogService
-from ..deps import (
-    get_current_user, get_active_user, get_instructor_user,
-    get_optional_current_user, get_blog_service
-)
-from ...models.user import User, UserRole
 
 router = APIRouter()
+
+
+@router.options("/")
+@router.options("/{post_id}")
+def options_handler():
+    """Handle CORS preflight requests"""
+    return {"message": "OK"}
 
 
 @router.get("/", response_model=List[BlogPostResponse])
 def get_blog_posts(
     skip: int = Query(0, ge=0, description="Number of posts to skip"),
     limit: int = Query(20, ge=1, le=100, description="Number of posts to return"),
-    category_id: Optional[int] = Query(None, description="Filter by category ID"),
-    tag_id: Optional[int] = Query(None, description="Filter by tag ID"),
-    author_id: Optional[int] = Query(None, description="Filter by author ID"),
+    category_id: Optional[UUID] = Query(None, description="Filter by category ID"),
+    tag_id: Optional[UUID] = Query(None, description="Filter by tag ID"),
+    author_id: Optional[UUID] = Query(None, description="Filter by author ID"),
     search: Optional[str] = Query(None, description="Search in title and content"),
-    is_published: Optional[bool] = Query(True, description="Filter by published status"),
+    is_published: Optional[bool] = Query(None, description="Filter by published status"),
     current_user: Optional[User] = Depends(get_optional_current_user),
     blog_service: BlogService = Depends(get_blog_service)
 ):
     """Get list of blog posts with filtering and search"""
-    # If user is not authenticated or not admin/instructor, only show published posts
-    if not current_user or current_user.role == UserRole.STUDENT:
+    # Logic phân quyền:
+    # - Người dùng không đăng nhập: chỉ xem được bài published
+    # - Người dùng đăng nhập: xem được bài của mình (cả published/unpublished) + bài published của người khác
+    # - Admin/Instructor: xem được tất cả bài
+    
+    if not current_user:
+        # Người dùng khách: chỉ xem bài published
         is_published = True
+    elif current_user.role in [UserRole.ADMIN, UserRole.INSTRUCTOR]:
+        # Admin/Instructor: có thể xem tất cả bài theo filter
+        pass
+    else:
+        # Người dùng thường: nếu không filter theo author_id cụ thể
+        if not author_id:
+            # Lấy tất cả bài published + bài của user hiện tại
+            posts = blog_service.get_posts_for_user(
+                user_id=current_user.id,
+                search_params=BlogSearchParams(
+                    q=search,
+                    category_id=category_id,
+                    tag_ids=[tag_id] if tag_id else None,
+                    is_published=is_published
+                ),
+                skip=skip,
+                limit=limit
+            )
+            return posts
+        elif author_id == current_user.id:
+            # Xem bài của chính mình: có thể xem cả published/unpublished
+            pass
+        else:
+            # Xem bài của người khác: chỉ xem published
+            is_published = True
     
     search_params = BlogSearchParams(
-        search=search,
+        q=search,
         category_id=category_id,
-        tag_id=tag_id,
+        tag_ids=[tag_id] if tag_id else None,
         author_id=author_id,
         is_published=is_published
     )
@@ -92,7 +127,7 @@ def get_my_posts(
 
 @router.get("/{post_id}", response_model=BlogPostResponse)
 def get_blog_post(
-    post_id: int,
+    post_id: UUID,
     current_user: Optional[User] = Depends(get_optional_current_user),
     blog_service: BlogService = Depends(get_blog_service)
 ):
@@ -121,7 +156,7 @@ def get_blog_post(
             )
     
     # Increment view count (you might want to implement rate limiting here)
-    blog_service.increment_post_views(post_id)
+    blog_service.increment_view_count(post_id)
     
     return post
 
@@ -157,7 +192,7 @@ def get_blog_post_by_slug(
             )
     
     # Increment view count
-    blog_service.increment_post_views(post.id)
+    blog_service.increment_view_count(post.id)
     
     return post
 
@@ -181,7 +216,7 @@ def create_blog_post(
 
 @router.put("/{post_id}", response_model=BlogPostResponse)
 def update_blog_post(
-    post_id: int,
+    post_id: UUID,
     post_update: BlogPostUpdate,
     current_user: User = Depends(get_active_user),
     blog_service: BlogService = Depends(get_blog_service)
@@ -215,7 +250,7 @@ def update_blog_post(
 
 @router.delete("/{post_id}")
 def delete_blog_post(
-    post_id: int,
+    post_id: UUID,
     current_user: User = Depends(get_active_user),
     blog_service: BlogService = Depends(get_blog_service)
 ):
@@ -236,7 +271,7 @@ def delete_blog_post(
             detail="Not enough permissions to delete this post"
         )
     
-    success = blog_service.delete_blog_post(post_id)
+    success = blog_service.delete_post(post_id, current_user.id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -248,7 +283,7 @@ def delete_blog_post(
 
 @router.post("/{post_id}/publish")
 def publish_blog_post(
-    post_id: int,
+    post_id: UUID,
     current_user: User = Depends(get_active_user),
     blog_service: BlogService = Depends(get_blog_service)
 ):
@@ -284,7 +319,7 @@ def publish_blog_post(
 
 @router.post("/{post_id}/unpublish")
 def unpublish_blog_post(
-    post_id: int,
+    post_id: UUID,
     current_user: User = Depends(get_active_user),
     blog_service: BlogService = Depends(get_blog_service)
 ):
@@ -320,7 +355,7 @@ def unpublish_blog_post(
 
 @router.get("/{post_id}/stats")
 def get_post_stats(
-    post_id: int,
+    post_id: UUID,
     current_user: User = Depends(get_active_user),
     blog_service: BlogService = Depends(get_blog_service)
 ):

@@ -5,80 +5,89 @@ import { Header } from "@/components/header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ChevronDown, ChevronUp, Calendar, Trophy, Plus, Edit, Trash2, Loader2 } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ChevronDown, ChevronUp, Plus, Edit, Trash2, Calendar, Loader2, Trophy } from "lucide-react"
 import { LessonDialog } from "@/components/lesson-dialog"
 import { ModuleDialog } from "@/components/module-dialog"
 import { apiClient } from "@/lib/api"
+import type { Course as ApiCourse, Module as ApiModule, Lesson as ApiLesson, User as ApiUser } from "@/lib/api"
 
-interface Lesson {
-  id: number
-  title: string
-  content: string
-  video_url?: string
-  attachments?: string[]
-  order_index: number
-  created_at: string
-  updated_at: string
-}
-
-interface Module {
-  id: number
-  title: string
-  description: string
-  order_index: number
-  lessons: Lesson[]
-  created_at: string
-  updated_at: string
-}
-
-interface Course {
-  id: number
-  title: string
-  description: string
+// Extended types for UI components
+interface Course extends ApiCourse {
   modules: Module[]
-  created_at: string
-  updated_at: string
+}
+
+interface Module extends ApiModule {
+  lessons: Lesson[]
+  lessonCount: number
+}
+
+interface Lesson extends ApiLesson {
+  date: string
+  instructor?: string
+  zoomLink?: string
+  quizLink?: string
+  attachments?: { name: string; url: string }[]
+  notification?: string
 }
 
 export default function LearningPathPage() {
+  const [user, setUser] = useState<ApiUser | null>(null)
   const [courses, setCourses] = useState<Course[]>([])
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null)
-  const [expandedModules, setExpandedModules] = useState<Set<number>>(new Set())
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null)
   const [isLessonDialogOpen, setIsLessonDialogOpen] = useState(false)
-  const [isModuleDialogOpen, setIsModuleDialogOpen] = useState(false)
   const [editingModule, setEditingModule] = useState<Module | null>(null)
+  const [isModuleDialogOpen, setIsModuleDialogOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [user, setUser] = useState<any>(null)
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true)
+        const [userData, coursesData] = await Promise.all([
+          apiClient.getCurrentUser(),
+          apiClient.getCourses()
+        ])
+        setUser(userData as ApiUser)
         
-        // Check if user is authenticated
-        const token = localStorage.getItem('access_token')
-        if (token) {
-          const userData = await apiClient.getCurrentUser()
-          setUser(userData)
-        }
+        // Transform courses data to include modules with lessons
+        const coursesWithModules = await Promise.all(
+          coursesData.map(async (course) => {
+            const modules = await apiClient.getModules(course.id)
+            const modulesWithLessons = await Promise.all(
+              modules.map(async (module) => {
+                const lessons = await apiClient.getLessons(module.id)
+                const transformedLessons = lessons?.map(lesson => ({
+                  ...lesson,
+                  date: lesson.created_at,
+                  instructor: course.instructor?.full_name,
+                  zoomLink: undefined,
+                  quizLink: undefined,
+                  attachments: [],
+                  notification: undefined
+                })) || []
+                return {
+                  ...module,
+                  lessons: transformedLessons,
+                  lessonCount: transformedLessons.length
+                }
+              })
+            )
+            return {
+              ...course,
+              modules: modulesWithLessons
+            }
+          })
+        )
         
-        // Fetch courses
-        const coursesData = await apiClient.getCourses()
-        setCourses(coursesData)
-        
-        // Select first course by default
-        if (coursesData.length > 0) {
-          setSelectedCourse(coursesData[0])
-          // Expand first module by default
-          if (coursesData[0].modules.length > 0) {
-            setExpandedModules(new Set([coursesData[0].modules[0].id]))
-          }
-        }
-      } catch (error: any) {
-        console.error('Failed to fetch learning data:', error)
-        setError(error.message || 'Failed to load learning path')
+        setCourses(coursesWithModules)
+        setSelectedCourse(coursesWithModules[0] || null)
+      } catch (err) {
+        console.error('Error fetching data:', err)
+        setError('Failed to load data')
       } finally {
         setLoading(false)
       }
@@ -87,7 +96,7 @@ export default function LearningPathPage() {
     fetchData()
   }, [])
 
-  const toggleModule = (moduleId: number) => {
+  const toggleModule = (moduleId: string) => {
     const newExpanded = new Set(expandedModules)
     if (newExpanded.has(moduleId)) {
       newExpanded.delete(moduleId)
@@ -112,7 +121,7 @@ export default function LearningPathPage() {
     setIsModuleDialogOpen(true)
   }
 
-  const handleDeleteModule = async (moduleId: number) => {
+  const handleDeleteModule = async (moduleId: string) => {
     if (!selectedCourse) return
     
     try {
@@ -126,7 +135,7 @@ export default function LearningPathPage() {
       }
       setSelectedCourse(updatedCourse)
       setCourses(courses.map(c => c.id === selectedCourse.id ? updatedCourse : c))
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to delete module:', error)
     }
   }
@@ -214,22 +223,19 @@ export default function LearningPathPage() {
           </div>
 
           <div className="flex items-center space-x-4">
-            <select 
-              className="px-4 py-2 border border-gray-300 rounded-lg bg-white"
-              value={selectedCourse?.id || ''}
-              onChange={(e) => {
-                const courseId = parseInt(e.target.value)
-                const course = courses.find(c => c.id === courseId)
-                if (course) {
-                  setSelectedCourse(course)
-                  setExpandedModules(new Set())
-                }
-              }}
-            >
+            <Select value={selectedCourse?.id || ""} onValueChange={(courseId) => {
+              const course = courses.find(c => c.id === courseId)
+              setSelectedCourse(course || null)
+            }}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Select a course" />
+              </SelectTrigger>
+              <SelectContent>
               {courses.map(course => (
-                <option key={course.id} value={course.id}>{course.title}</option>
-              ))}
-            </select>
+                   <SelectItem key={course.id} value={course.id}>{course.title}</SelectItem>
+                 ))}
+               </SelectContent>
+             </Select>
             {user?.role === "admin" && (
               <Button onClick={handleAddModule}>
                 <Plus className="w-4 h-4 mr-2" />
@@ -245,7 +251,7 @@ export default function LearningPathPage() {
         </div>
 
         <div className="space-y-4">
-          {selectedCourse.modules.map((module) => (
+          {selectedCourse.modules?.map((module) => (
             <Card key={module.id} className="overflow-hidden">
               <CardHeader
                 className="cursor-pointer hover:bg-gray-50 transition-colors"
@@ -255,7 +261,7 @@ export default function LearningPathPage() {
                   <div className="flex-1">
                     <div className="flex items-center space-x-3">
                       <CardTitle className="text-xl text-gray-900">{module.title}</CardTitle>
-                      <Badge variant="secondary">{module.lessons.length} lessons</Badge>
+                      <Badge variant="secondary">{module.lessons?.length || 0} lessons</Badge>
                       {user?.role === "admin" && (
                         <div className="flex space-x-2" onClick={(e) => e.stopPropagation()}>
                           <Button variant="ghost" size="sm" onClick={() => handleEditModule(module)}>
@@ -280,7 +286,7 @@ export default function LearningPathPage() {
               {expandedModules.has(module.id) && (
                 <CardContent className="pt-0">
                   <div className="space-y-3">
-                    {module.lessons.length === 0 ? (
+                    {(!module.lessons || module.lessons.length === 0) ? (
                       <div className="text-center py-8 text-gray-500">
                         No lessons available in this module
                       </div>
@@ -301,16 +307,16 @@ export default function LearningPathPage() {
                               {lesson.video_url && (
                                 <span className="text-blue-600">Video Available</span>
                               )}
-                              {lesson.attachments && lesson.attachments.length > 0 && (
-                                <span className="text-green-600">{lesson.attachments.length} attachments</span>
+                              {lesson.duration && (
+                                <span className="text-green-600">{lesson.duration} min</span>
                               )}
                             </div>
                             <div className="mt-2 text-sm text-gray-600 line-clamp-2">
-                              {lesson.content}
+                              {lesson.lesson_type && `Type: ${lesson.lesson_type}`}
                             </div>
                           </div>
                           <Badge variant="outline" className="text-xs">
-                            Lesson {lesson.order_index}
+                            Lesson
                           </Badge>
                         </div>
                       ))
@@ -330,16 +336,30 @@ export default function LearningPathPage() {
         open={isModuleDialogOpen}
         onOpenChange={setIsModuleDialogOpen}
         onSave={(moduleData) => {
-          if (editingModule) {
-            setModules(modules.map((m) => (m.id === editingModule.id ? { ...m, ...moduleData } : m)))
-          } else {
-            const newModule: Module = {
-              id: Date.now().toString(),
-              lessons: [],
-              ...moduleData,
-            }
-            setModules([...modules, newModule])
-          }
+          if (!selectedCourse) return
+
+          const currentModules = selectedCourse.modules || []
+          const updatedModules = editingModule
+            ? currentModules.map((m) =>
+                m.id === editingModule.id ? { ...m, ...moduleData } : m
+              )
+            : [
+                ...currentModules,
+                { 
+                  ...moduleData, 
+                  id: Date.now().toString(), 
+                  lessons: [],
+                  lessonCount: 0,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                  course_id: selectedCourse.id,
+                  order_index: currentModules.length
+                },
+              ]
+
+          const updatedCourse = { ...selectedCourse, modules: updatedModules }
+          setCourses(courses.map((c) => (c.id === updatedCourse.id ? updatedCourse : c)))
+          setSelectedCourse(updatedCourse)
         }}
       />
     </div>

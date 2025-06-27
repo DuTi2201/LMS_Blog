@@ -1,7 +1,7 @@
 from typing import Optional, List
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, ConfigDict
 from datetime import datetime
-from typing import Optional
+from uuid import UUID
 
 
 # Course Schemas
@@ -71,21 +71,21 @@ class CourseUpdate(BaseModel):
         return v
 
 
-class CourseResponse(CourseBase):
-    id: int
-    slug: str
-    author_id: int
-    enrollment_count: int
+class CourseResponse(BaseModel):
+    id: UUID
+    title: str
+    description: Optional[str] = None
+    short_description: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    difficulty_level: str
+    estimated_duration: Optional[int] = None
+    is_published: bool
+    price: float
     created_at: datetime
     updated_at: datetime
-    published_at: Optional[datetime] = None
+    instructor_id: UUID
     
-    # Related objects
-    author: Optional[dict] = None  # Will be populated with user data
-    modules: Optional[List[dict]] = None  # Will be populated with module data
-    
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Module Schemas

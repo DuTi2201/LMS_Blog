@@ -27,7 +27,7 @@ export function Header() {
         const token = localStorage.getItem('access_token')
         if (token) {
           const userData = await apiClient.getCurrentUser()
-          setUser(userData)
+          setUser(userData as User)
         }
       } catch (error) {
         console.error('Auth check failed:', error)
