@@ -8,7 +8,7 @@ from .config import settings
 engine = create_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,
-    echo=settings.DEBUG,
+    echo=False,  # Temporarily disable echo to debug SQL issues
     # For PostgreSQL, we don't need StaticPool
     # poolclass=StaticPool if "sqlite" in settings.DATABASE_URL else None,
 )

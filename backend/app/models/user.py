@@ -29,6 +29,7 @@ class User(Base):
     
     # Relationships
     blog_posts = relationship("BlogPost", back_populates="author", cascade="all, delete-orphan")
+    courses = relationship("Course", back_populates="instructor", cascade="all, delete-orphan")
     enrollments = relationship("UserEnrollment", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):

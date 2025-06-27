@@ -340,9 +340,11 @@ class CourseListResponse(BaseModel):
 # Course Search Schema
 class CourseSearchParams(BaseModel):
     q: Optional[str] = None  # Search query
-    author_id: Optional[int] = None
-    level: Optional[str] = None
+    instructor_id: Optional[int] = None
+    difficulty_level: Optional[str] = None
     is_published: Optional[bool] = None
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
     page: int = 1
     size: int = 10
     sort_by: str = "created_at"
@@ -365,7 +367,7 @@ class CourseSearchParams(BaseModel):
     @field_validator("sort_by")
     @classmethod
     def validate_sort_by(cls, v):
-        allowed_fields = ["created_at", "updated_at", "title", "enrollment_count", "published_at"]
+        allowed_fields = ["created_at", "updated_at", "title", "price"]
         if v not in allowed_fields:
             raise ValueError(f"Sort by must be one of: {', '.join(allowed_fields)}")
         return v
@@ -377,10 +379,10 @@ class CourseSearchParams(BaseModel):
             raise ValueError("Sort order must be 'asc' or 'desc'")
         return v
     
-    @field_validator("level")
+    @field_validator("difficulty_level")
     @classmethod
-    def validate_level(cls, v):
+    def validate_difficulty_level(cls, v):
         allowed_levels = ["beginner", "intermediate", "advanced"]
         if v is not None and v not in allowed_levels:
-            raise ValueError(f"Level must be one of: {', '.join(allowed_levels)}")
+            raise ValueError(f"Difficulty level must be one of: {', '.join(allowed_levels)}")
         return v

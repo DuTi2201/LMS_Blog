@@ -36,17 +36,15 @@ def get_courses(
         is_published = True
     
     search_params = CourseSearchParams(
-        search=search,
+        q=search,
         instructor_id=instructor_id,
         is_published=is_published,
-        difficulty_level=difficulty_level
+        difficulty_level=difficulty_level,
+        page=skip//limit + 1,
+        size=limit
     )
     
-    courses = learning_service.search_courses(
-        search_params=search_params,
-        skip=skip,
-        limit=limit
-    )
+    courses, total = learning_service.get_courses(search_params)
     
     return courses
 

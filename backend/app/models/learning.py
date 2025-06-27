@@ -10,7 +10,8 @@ class Course(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    thumbnail = Column(String(500), nullable=True)
+    short_description = Column(Text, nullable=True)
+    thumbnail_url = Column(String(500), nullable=True)
     difficulty_level = Column(String(20), default="beginner", nullable=False)  # beginner, intermediate, advanced
     estimated_duration = Column(Integer, nullable=True)  # in hours
     is_published = Column(Boolean, default=False, nullable=False)
@@ -18,7 +19,11 @@ class Course(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
+    # Foreign Keys
+    instructor_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
     # Relationships
+    instructor = relationship("User", back_populates="courses")
     modules = relationship("Module", back_populates="course", cascade="all, delete-orphan", order_by="Module.order_index")
     enrollments = relationship("UserEnrollment", back_populates="course", cascade="all, delete-orphan")
     

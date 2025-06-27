@@ -42,7 +42,7 @@ def get_blog_posts(
         is_published=is_published
     )
     
-    posts = blog_service.search_blog_posts(
+    posts, total = blog_service.search_blog_posts(
         search_params=search_params,
         skip=skip,
         limit=limit

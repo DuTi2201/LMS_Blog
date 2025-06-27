@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, and_, desc, asc, func
 from fastapi import HTTPException, status
 from datetime import datetime
+from typing import List, Optional, Tuple
 import re
 
 from ..models.blog import BlogPost, BlogCategory, BlogTag, blog_post_tags
@@ -59,9 +60,14 @@ class BlogService:
         
         return db_category
     
-    def get_categories(self, skip: int = 0, limit: int = 100) -> List[BlogCategory]:
+    def get_categories(self, skip: int = 0, limit: int = 100, search: Optional[str] = None) -> List[BlogCategory]:
         """Get all blog categories"""
-        return self.db.query(BlogCategory).offset(skip).limit(limit).all()
+        query = self.db.query(BlogCategory)
+        
+        if search:
+            query = query.filter(BlogCategory.name.ilike(f"%{search}%"))
+        
+        return query.offset(skip).limit(limit).all()
     
     def get_category_by_id(self, category_id: int) -> Optional[BlogCategory]:
         """Get category by ID"""
@@ -142,6 +148,16 @@ class BlogService:
     def get_tags(self, skip: int = 0, limit: int = 100) -> List[BlogTag]:
         """Get all blog tags"""
         return self.db.query(BlogTag).offset(skip).limit(limit).all()
+    
+    def get_blog_tags(self, skip: int = 0, limit: int = 100, search: Optional[str] = None) -> List[BlogTag]:
+        """Get blog tags with optional search"""
+        query = self.db.query(BlogTag)
+        
+        if search:
+            search_term = f"%{search}%"
+            query = query.filter(BlogTag.name.ilike(search_term))
+        
+        return query.offset(skip).limit(limit).all()
     
     def get_tag_by_id(self, tag_id: int) -> Optional[BlogTag]:
         """Get tag by ID"""
@@ -229,6 +245,10 @@ class BlogService:
         self.db.refresh(db_post)
         
         return db_post
+    
+    def search_blog_posts(self, search_params: BlogSearchParams, skip: int = 0, limit: int = 10) -> Tuple[List[BlogPost], int]:
+        """Search blog posts with parameters"""
+        return self.get_posts(search_params)
     
     def get_posts(self, search_params: BlogSearchParams) -> Tuple[List[BlogPost], int]:
         """Get blog posts with search and pagination"""

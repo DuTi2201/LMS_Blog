@@ -24,7 +24,7 @@ def get_blog_categories(
     blog_service: BlogService = Depends(get_blog_service)
 ):
     """Get list of blog categories"""
-    categories = blog_service.get_blog_categories(
+    categories = blog_service.get_categories(
         skip=skip,
         limit=limit,
         search=search

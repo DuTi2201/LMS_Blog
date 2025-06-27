@@ -12,6 +12,7 @@ from ..services.auth_service import AuthService
 
 # Security scheme
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 
 
 def get_current_user(
@@ -118,7 +119,7 @@ def get_instructor_user(
 
 def get_optional_current_user(
     db: Session = Depends(get_db),
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security)
 ) -> Optional[User]:
     """Get current user if token is provided, otherwise return None"""
     if not credentials:
