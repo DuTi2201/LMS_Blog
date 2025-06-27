@@ -200,10 +200,10 @@ def get_blog_post_by_slug(
 @router.post("/", response_model=BlogPostResponse, status_code=status.HTTP_201_CREATED)
 def create_blog_post(
     post_create: BlogPostCreate,
-    current_user: User = Depends(get_instructor_user),
+    current_user: User = Depends(get_active_user), # Cho phép bất kỳ user nào đã đăng nhập cũng có thể tạo bài viết
     blog_service: BlogService = Depends(get_blog_service)
 ):
-    """Create new blog post (Instructor+ only)"""
+    """Create new blog post"""
     try:
         post = blog_service.create_blog_post(post_create, author_id=current_user.id)
         return post
@@ -222,30 +222,27 @@ def update_blog_post(
     blog_service: BlogService = Depends(get_blog_service)
 ):
     """Update blog post"""
-    # Get the existing post
     existing_post = blog_service.get_blog_post_by_id(post_id)
     if not existing_post:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Blog post not found"
-        )
-    
-    # Check permissions: only author or admin can update
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Blog post not found")
+
+    # Allow author or admin/instructor to update
     if (current_user.id != existing_post.author_id and 
-        current_user.role != UserRole.ADMIN):
+        current_user.role not in [UserRole.ADMIN, UserRole.INSTRUCTOR]):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions to update this post"
         )
-    
+
     try:
-        post = blog_service.update_post(post_id, post_update, current_user.id)
-        return post
+        updated_post = blog_service.update_post(post_id=post_id, post_update=post_update, user_id=current_user.id)
+        return updated_post
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        # Log the full error for debugging
+        # logger.error(f"Error updating post {post_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred")
 
 
 @router.delete("/{post_id}")
