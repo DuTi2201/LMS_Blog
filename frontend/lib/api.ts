@@ -440,6 +440,19 @@ class ApiClient {
     });
   }
 
+  async updateModule(moduleId: string, moduleData: Partial<ModuleData>): Promise<Module> {
+    return this.request<Module>(`/api/v1/modules/${moduleId}`, {
+      method: 'PUT',
+      body: JSON.stringify(moduleData),
+    });
+  }
+
+  async deleteModule(moduleId: string): Promise<void> {
+    return this.request<void>(`/api/v1/modules/${moduleId}`, {
+      method: 'DELETE',
+    });
+  }
+
   async getLessons(moduleId: string): Promise<Lesson[]> {
     const response = await this.request<{items: Lesson[], total: number}>(`/api/v1/modules/${moduleId}/lessons/`);
     return response.items;
@@ -449,6 +462,19 @@ class ApiClient {
     return this.request<Lesson>(`/api/v1/modules/${moduleId}/lessons/`, {
       method: 'POST',
       body: JSON.stringify(lessonData),
+    });
+  }
+
+  async updateLesson(lessonId: string, lessonData: Partial<LessonData>): Promise<Lesson> {
+    return this.request<Lesson>(`/api/v1/lessons/${lessonId}`, {
+      method: 'PUT',
+      body: JSON.stringify(lessonData),
+    });
+  }
+
+  async deleteLesson(lessonId: string): Promise<void> {
+    return this.request<void>(`/api/v1/lessons/${lessonId}`, {
+      method: 'DELETE',
     });
   }
 

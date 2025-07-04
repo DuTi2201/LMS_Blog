@@ -603,6 +603,15 @@ class LearningService:
             desc(UserEnrollment.enrolled_at)
         ).offset(skip).limit(limit).all()
     
+    def get_user_enrollment(self, user_id: str, course_id: str) -> Optional[UserEnrollment]:
+        """Get user's enrollment for a specific course"""
+        return self.db.query(UserEnrollment).filter(
+            and_(
+                UserEnrollment.user_id == user_id,
+                UserEnrollment.course_id == course_id
+            )
+        ).first()
+    
     def get_course_enrollments(self, course_id: str, skip: int = 0, limit: int = 10) -> List[UserEnrollment]:
         """Get course enrollments"""
         return self.db.query(UserEnrollment).options(

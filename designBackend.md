@@ -572,7 +572,7 @@ async def health_check(db: Session = Depends(get_db)):
 
 Hệ thống backend này được thiết kế để hỗ trợ đầy đủ các chức năng của frontend hiện tại, với khả năng mở rộng và bảo mật cao, phù hợp cho việc phát triển một LMS hoàn chỉnh.
         ##  Admin Account
-- Email: admin@lms.com
+- Email: vuvanduong802@gmail.com
 - Username: admin
 - Password: admin123
 - Role: admin

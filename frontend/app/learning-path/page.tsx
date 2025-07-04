@@ -139,10 +139,9 @@ export default function LearningPathPage() {
     if (!selectedCourse) return
     
     try {
-      // Note: Implement delete module API call when available
-      // await apiClient.deleteModule(moduleId)
+      await apiClient.deleteModule(moduleId)
       
-      // Update local state
+      // Update local state after successful API call
       const updatedCourse = {
         ...selectedCourse,
         modules: selectedCourse.modules.filter((m) => m.id !== moduleId)
@@ -151,6 +150,7 @@ export default function LearningPathPage() {
       setCourses(courses.map(c => c.id === selectedCourse.id ? updatedCourse : c))
     } catch (error) {
       console.error('Failed to delete module:', error)
+      setError('Failed to delete module')
     }
   }
 
@@ -162,6 +162,7 @@ export default function LearningPathPage() {
 
   const handleEditLesson = (lesson: Lesson) => {
     setEditingLesson(lesson)
+    setCurrentModuleId(lesson.module_id)
     setIsLessonFormDialogOpen(true)
   }
 
@@ -169,10 +170,9 @@ export default function LearningPathPage() {
     if (!selectedCourse) return
     
     try {
-      // Note: Implement delete lesson API call when available
-      // await apiClient.deleteLesson(lessonId)
+      await apiClient.deleteLesson(lessonId)
       
-      // Update local state
+      // Update local state after successful API call
       const updatedModules = selectedCourse.modules.map(module => {
         if (module.id === moduleId) {
           return {
@@ -188,46 +188,67 @@ export default function LearningPathPage() {
       setCourses(courses.map(c => c.id === selectedCourse.id ? updatedCourse : c))
     } catch (error) {
       console.error('Failed to delete lesson:', error)
+      setError('Failed to delete lesson')
     }
   }
 
-  const handleSaveLesson = (lessonData: any) => {
+  const handleSaveLesson = async (lessonData: any) => {
     if (!selectedCourse || !currentModuleId) return
 
-    const updatedModules = selectedCourse.modules.map(module => {
-      if (module.id === currentModuleId) {
-        const currentLessons = module.lessons || []
-        const updatedLessons = editingLesson
-          ? currentLessons.map(lesson =>
-              lesson.id === editingLesson.id ? { ...lesson, ...lessonData } : lesson
-            )
-          : [
-              ...currentLessons,
-              {
-                ...lessonData,
-                id: Date.now().toString(),
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                module_id: currentModuleId,
-                date: new Date().toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })
-              }
-            ]
-        
-        return { ...module, lessons: updatedLessons }
+    try {
+      let savedLesson: Lesson
+      
+      if (editingLesson) {
+        // Update existing lesson
+        savedLesson = await apiClient.updateLesson(editingLesson.id, lessonData)
+      } else {
+        // Create new lesson
+        savedLesson = await apiClient.createLesson(currentModuleId, lessonData)
       }
-      return module
-    })
 
-    const updatedCourse = { ...selectedCourse, modules: updatedModules }
-    setSelectedCourse(updatedCourse)
-    setCourses(courses.map(c => c.id === selectedCourse.id ? updatedCourse : c))
-    setIsLessonFormDialogOpen(false)
-    setCurrentModuleId(null)
+      // Update local state with API response
+      const updatedModules = selectedCourse.modules.map(module => {
+        if (module.id === currentModuleId) {
+          const currentLessons = module.lessons || []
+          const updatedLessons = editingLesson
+            ? currentLessons.map(lesson =>
+                lesson.id === editingLesson.id ? {
+                  ...savedLesson,
+                  date: savedLesson.created_at,
+                  instructor: selectedCourse.instructor?.full_name,
+                  zoomLink: undefined,
+                  quizLink: undefined,
+                  attachments: [],
+                  notification: undefined
+                } : lesson
+              )
+            : [
+                ...currentLessons,
+                {
+                  ...savedLesson,
+                  date: savedLesson.created_at,
+                  instructor: selectedCourse.instructor?.full_name,
+                  zoomLink: undefined,
+                  quizLink: undefined,
+                  attachments: [],
+                  notification: undefined
+                }
+              ]
+          
+          return { ...module, lessons: updatedLessons }
+        }
+        return module
+      })
+
+      const updatedCourse = { ...selectedCourse, modules: updatedModules }
+      setSelectedCourse(updatedCourse)
+      setCourses(courses.map(c => c.id === selectedCourse.id ? updatedCourse : c))
+      setIsLessonFormDialogOpen(false)
+      setCurrentModuleId(null)
+    } catch (error) {
+      console.error('Failed to save lesson:', error)
+      setError('Failed to save lesson')
+    }
   }
 
   const handleAddCourse = () => {
@@ -537,31 +558,43 @@ export default function LearningPathPage() {
         module={editingModule}
         open={isModuleDialogOpen}
         onOpenChange={setIsModuleDialogOpen}
-        onSave={(moduleData) => {
+        onSave={async (moduleData) => {
           if (!selectedCourse) return
 
-          const currentModules = selectedCourse.modules || []
-          const updatedModules = editingModule
-            ? currentModules.map((m) =>
-                m.id === editingModule.id ? { ...m, ...moduleData } : m
-              )
-            : [
-                ...currentModules,
-                { 
-                  ...moduleData, 
-                  id: Date.now().toString(), 
-                  lessons: [],
-                  lessonCount: 0,
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                  course_id: selectedCourse.id,
-                  order_index: currentModules.length
-                },
-              ]
+          try {
+            let savedModule: Module
+            
+            if (editingModule) {
+              // Update existing module
+              savedModule = await apiClient.updateModule(editingModule.id, moduleData)
+            } else {
+              // Create new module
+              savedModule = await apiClient.createModule(selectedCourse.id, moduleData)
+            }
 
-          const updatedCourse = { ...selectedCourse, modules: updatedModules }
-          setCourses(courses.map((c) => (c.id === updatedCourse.id ? updatedCourse : c)))
-          setSelectedCourse(updatedCourse)
+            // Update local state with API response
+            const currentModules = selectedCourse.modules || []
+            const updatedModules = editingModule
+              ? currentModules.map((m) =>
+                  m.id === editingModule.id ? { ...savedModule, lessons: m.lessons, lessonCount: m.lessons?.length || 0 } : m
+                )
+              : [
+                  ...currentModules,
+                  { 
+                    ...savedModule, 
+                    lessons: [],
+                    lessonCount: 0
+                  },
+                ]
+
+            const updatedCourse = { ...selectedCourse, modules: updatedModules }
+            setCourses(courses.map((c) => (c.id === updatedCourse.id ? updatedCourse : c)))
+            setSelectedCourse(updatedCourse)
+            setIsModuleDialogOpen(false)
+          } catch (error) {
+            console.error('Failed to save module:', error)
+            setError('Failed to save module')
+          }
         }}
       />
 
