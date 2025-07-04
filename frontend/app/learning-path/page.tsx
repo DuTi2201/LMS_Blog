@@ -33,6 +33,15 @@ interface Lesson extends ApiLesson {
   notification?: string
 }
 
+interface LessonFormData {
+  title: string
+  description?: string
+  instructor_name?: string
+  zoom_link?: string
+  quiz_link?: string
+  notification?: string
+}
+
 export default function LearningPathPage() {
   const [user, setUser] = useState<User | null>(null)
   const [courses, setCourses] = useState<Course[]>([])
@@ -77,11 +86,11 @@ export default function LearningPathPage() {
                 const transformedLessons = lessons?.map(lesson => ({
                   ...lesson,
                   date: lesson.created_at,
-                  instructor: course.instructor?.full_name,
-                  zoomLink: undefined,
-                  quizLink: undefined,
-                  attachments: [],
-                  notification: undefined
+                  instructor: lesson.instructor_name || course.instructor?.full_name,
+                  zoomLink: lesson.zoom_link,
+                  quizLink: lesson.quiz_link,
+                  attachments: lesson.attachments || [],
+                  notification: lesson.notification
                 })) || []
                 return {
                   ...module,
@@ -192,19 +201,34 @@ export default function LearningPathPage() {
     }
   }
 
-  const handleSaveLesson = async (lessonData: any) => {
-    if (!selectedCourse || !currentModuleId) return
+  const handleSaveLesson = async (lessonData: LessonFormData) => {
+    if (!selectedCourse || !currentModuleId) {
+      setError('No course or module selected')
+      return
+    }
+
+    // Validate required fields
+    if (!lessonData.title?.trim()) {
+      setError('Lesson title is required')
+      return
+    }
 
     try {
-      // Transform frontend lesson data to backend format
+      // Calculate order for new lessons
+      const currentModule = selectedCourse.modules?.find(m => m.id === currentModuleId)
+      const order_index = editingLesson ? editingLesson.order_index : (currentModule?.lessons?.length || 0) + 1
+
+      // Transform frontend lesson data to backend format (matching database schema)
       const backendLessonData = {
-        title: lessonData.title,
-        content: lessonData.description || lessonData.title, // Use description as content, fallback to title
-        order: editingLesson ? editingLesson.order_index : 0, // Use existing order or default to 0
-        module_id: currentModuleId,
-        lesson_type: lessonData.video_url ? 'video' : 'text',
-        video_url: lessonData.video_url || undefined,
-        duration_minutes: lessonData.duration || undefined
+        title: lessonData.title.trim(),
+        description: lessonData.description?.trim() || null,
+        instructor_name: lessonData.instructor_name?.trim() || selectedCourse.instructor?.full_name || null,
+        zoom_link: lessonData.zoom_link?.trim() || null,
+        quiz_link: lessonData.quiz_link?.trim() || null,
+        notification: lessonData.notification?.trim() || null,
+        order_index: order_index,
+        is_active: true,
+        module_id: currentModuleId
       }
       
       let apiLesson: ApiLesson
@@ -226,11 +250,11 @@ export default function LearningPathPage() {
           month: 'long',
           day: 'numeric'
         }),
-        instructor: selectedCourse.instructor?.full_name,
-        zoomLink: undefined,
-        quizLink: undefined,
-        attachments: [],
-        notification: undefined
+        instructor: apiLesson.instructor_name || selectedCourse.instructor?.full_name,
+        zoomLink: apiLesson.zoom_link,
+        quizLink: apiLesson.quiz_link,
+        attachments: apiLesson.attachments || [],
+        notification: apiLesson.notification
       }
 
       // Update local state with transformed lesson
@@ -255,11 +279,15 @@ export default function LearningPathPage() {
       const updatedCourse = { ...selectedCourse, modules: updatedModules }
       setSelectedCourse(updatedCourse)
       setCourses(courses.map(c => c.id === selectedCourse.id ? updatedCourse : c))
+      
+      // Reset form state
       setIsLessonFormDialogOpen(false)
+      setEditingLesson(null)
       setCurrentModuleId(null)
+      setError(null)
     } catch (error) {
       console.error('Failed to save lesson:', error)
-      setError('Failed to save lesson')
+      setError(error instanceof Error ? error.message : 'Failed to save lesson')
     }
   }
 

@@ -1,6 +1,7 @@
-from typing import Optional, List, Tuple
+from typing import Optional, List
+from uuid import UUID
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_, desc, asc, func
+from sqlalchemy import and_, or_, desc, func
 from fastapi import HTTPException, status
 from datetime import datetime
 from typing import List, Tuple, Optional
@@ -40,6 +41,9 @@ class LearningService:
         
         self.db.add(db_course)
         self.db.commit()
+        self.db.refresh(db_course)
+        
+        return db_course
     
     def get_lessons_by_module(self, module_id: str, skip: int = 0, limit: int = 50) -> List[Lesson]:
         """Get lessons by module ID"""
@@ -52,9 +56,6 @@ class LearningService:
         return self.db.query(Lesson).order_by(
             Lesson.created_at.desc()
         ).offset(skip).limit(limit).all()
-        self.db.refresh(db_course)
-        
-        return db_course
     
     def get_courses(self, search_params: CourseSearchParams) -> Tuple[List[Course], int]:
         """Get courses with search and pagination"""
@@ -247,6 +248,18 @@ class LearningService:
         ).limit(limit).all()
     
     # Module Methods
+    def get_modules(self, course_id: Optional[str] = None, skip: int = 0, limit: int = 50) -> List[Module]:
+        """Get modules with optional course filter"""
+        query = self.db.query(Module).options(
+            joinedload(Module.course),
+            joinedload(Module.lessons).joinedload(Lesson.attachments)
+        )
+        
+        if course_id:
+            query = query.filter(Module.course_id == course_id)
+        
+        return query.order_by(Module.order_index).offset(skip).limit(limit).all()
+    
     def create_module(self, course_id: str, module_create: ModuleCreate) -> Module:
         """Create a new module"""
         # Check if course exists
@@ -289,14 +302,14 @@ class LearningService:
             Module.order_index
         ).offset(skip).limit(limit).all()
     
-    def get_module_by_id(self, module_id: int) -> Optional[Module]:
+    def get_module_by_id(self, module_id: UUID) -> Optional[Module]:
         """Get module by ID with lessons"""
         return self.db.query(Module).options(
             joinedload(Module.course),
             joinedload(Module.lessons).joinedload(Lesson.attachments)
         ).filter(Module.id == module_id).first()
     
-    def update_module(self, module_id: int, module_update: ModuleUpdate, user_id: str) -> Module:
+    def update_module(self, module_id: UUID, module_update: ModuleUpdate, user_id: str) -> Module:
         """Update module"""
         module = self.get_module_by_id(module_id)
         if not module:
@@ -325,7 +338,7 @@ class LearningService:
         
         return module
     
-    def delete_module(self, module_id: int, user_id: str) -> bool:
+    def delete_module(self, module_id: UUID, user_id: str) -> bool:
         """Delete module"""
         module = self.get_module_by_id(module_id)
         if not module:
@@ -388,7 +401,7 @@ class LearningService:
         ).order_by(Module.order_index).all()
     
     # Lesson Methods
-    def create_lesson(self, lesson_create: LessonCreate, module_id: int, user_id: str) -> Lesson:
+    def create_lesson(self, lesson_create: LessonCreate, module_id: UUID, user_id: str) -> Lesson:
         """Create a new lesson"""
         # Check if module exists and user has permission
         module = self.get_module_by_id(module_id)
@@ -405,15 +418,25 @@ class LearningService:
                 detail="Not authorized to add lessons to this module"
             )
         
-        # Get next order number
-        max_order = self.db.query(func.max(Lesson.order_index)).filter(
-            Lesson.module_id == module_id
-        ).scalar() or 0
+        # Get next order number if not provided
+        order_index = lesson_create.order_index
+        if order_index is None:
+            max_order = self.db.query(func.max(Lesson.order_index)).filter(
+                Lesson.module_id == module_id
+            ).scalar() or 0
+            order_index = max_order + 1
         
         db_lesson = Lesson(
             title=lesson_create.title,
-            description=lesson_create.content,  # Map content to description
-            order_index=lesson_create.order if hasattr(lesson_create, 'order') else max_order + 1,
+            description=lesson_create.description,
+            instructor=lesson_create.instructor,
+            zoom_link=lesson_create.zoom_link,
+            quiz_link=lesson_create.quiz_link,
+            notification=lesson_create.notification,
+            duration=lesson_create.duration,
+            video_url=lesson_create.video_url,
+            order_index=order_index,
+            is_active=True,  # Default to active
             module_id=module_id
         )
         
@@ -423,14 +446,23 @@ class LearningService:
         
         return db_lesson
     
-    def get_lesson_by_id(self, lesson_id: int) -> Optional[Lesson]:
+    def get_lesson_by_id(self, lesson_id: UUID) -> Optional[Lesson]:
         """Get lesson by ID with attachments"""
         return self.db.query(Lesson).options(
             joinedload(Lesson.module).joinedload(Module.course),
             joinedload(Lesson.attachments)
         ).filter(Lesson.id == lesson_id).first()
     
-    def update_lesson(self, lesson_id: int, lesson_update: LessonUpdate, user_id: str) -> Lesson:
+    def get_lessons_by_module(self, module_id: UUID, skip: int = 0, limit: int = 50) -> List[Lesson]:
+        """Get lessons by module ID"""
+        return self.db.query(Lesson).options(
+            joinedload(Lesson.module).joinedload(Module.course),
+            joinedload(Lesson.attachments)
+        ).filter(
+            Lesson.module_id == module_id
+        ).order_by(Lesson.order_index).offset(skip).limit(limit).all()
+    
+    def update_lesson(self, lesson_id: UUID, lesson_update: LessonUpdate, user_id: str) -> Lesson:
         """Update lesson"""
         lesson = self.get_lesson_by_id(lesson_id)
         if not lesson:
@@ -459,7 +491,7 @@ class LearningService:
         
         return lesson
     
-    def delete_lesson(self, lesson_id: int, user_id: str) -> bool:
+    def delete_lesson(self, lesson_id: UUID, user_id: str) -> bool:
         """Delete lesson"""
         lesson = self.get_lesson_by_id(lesson_id)
         if not lesson:
@@ -482,7 +514,7 @@ class LearningService:
         return True
     
     # Lesson Attachment Methods
-    def create_lesson_attachment(self, attachment_create: LessonAttachmentCreate, lesson_id: int, user_id: str) -> LessonAttachment:
+    def create_lesson_attachment(self, attachment_create: LessonAttachmentCreate, lesson_id: UUID, user_id: str) -> LessonAttachment:
         """Create a new lesson attachment"""
         # Check if lesson exists and user has permission
         lesson = self.get_lesson_by_id(lesson_id)
@@ -500,8 +532,8 @@ class LearningService:
             )
         
         db_attachment = LessonAttachment(
-            filename=attachment_create.filename,
-            file_url=attachment_create.file_url,
+            name=attachment_create.name,
+            url=attachment_create.url,
             file_type=attachment_create.file_type,
             file_size=attachment_create.file_size,
             lesson_id=lesson_id
@@ -513,7 +545,7 @@ class LearningService:
         
         return db_attachment
     
-    def delete_lesson_attachment(self, attachment_id: int, user_id: str) -> bool:
+    def delete_lesson_attachment(self, attachment_id: UUID, user_id: str) -> bool:
         """Delete lesson attachment"""
         attachment = self.db.query(LessonAttachment).options(
             joinedload(LessonAttachment.lesson).joinedload(Lesson.module).joinedload(Module.course)
@@ -537,6 +569,18 @@ class LearningService:
         self.db.commit()
         
         return True
+    
+    def get_lesson_attachment_by_id(self, attachment_id: UUID) -> Optional[LessonAttachment]:
+        """Get lesson attachment by ID"""
+        return self.db.query(LessonAttachment).options(
+            joinedload(LessonAttachment.lesson).joinedload(Lesson.module).joinedload(Module.course)
+        ).filter(LessonAttachment.id == attachment_id).first()
+    
+    def get_lesson_attachments(self, lesson_id: UUID) -> List[LessonAttachment]:
+        """Get all attachments for a lesson"""
+        return self.db.query(LessonAttachment).filter(
+            LessonAttachment.lesson_id == lesson_id
+        ).all()
     
     # Enrollment Methods
     def enroll_user(self, enrollment_create: UserEnrollmentCreate, user_id: str) -> UserEnrollment:
@@ -641,7 +685,7 @@ class LearningService:
         return True
     
     # Progress Tracking Methods
-    def mark_lesson_complete(self, lesson_id: int, user_id: str) -> UserProgress:
+    def mark_lesson_complete(self, lesson_id: UUID, user_id: str) -> UserProgress:
         """Mark lesson as completed for user"""
         # Check if lesson exists
         lesson = self.get_lesson_by_id(lesson_id)
@@ -693,6 +737,59 @@ class LearningService:
         self._update_course_progress(user_id, lesson.module.course_id)
         
         return progress
+    
+    def uncomplete_lesson(self, lesson_id: UUID, user_id: str) -> bool:
+        """Mark lesson as uncompleted for user"""
+        # Check if lesson exists
+        lesson = self.get_lesson_by_id(lesson_id)
+        if not lesson:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Lesson not found"
+            )
+        
+        # Check if user is enrolled in the course
+        enrollment = self.db.query(UserEnrollment).filter(
+            and_(
+                UserEnrollment.user_id == user_id,
+                UserEnrollment.course_id == lesson.module.course_id
+            )
+        ).first()
+        
+        if not enrollment:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User is not enrolled in this course"
+            )
+        
+        # Find existing progress
+        existing_progress = self.db.query(UserProgress).filter(
+            and_(
+                UserProgress.user_id == user_id,
+                UserProgress.lesson_id == lesson_id
+            )
+        ).first()
+        
+        if existing_progress:
+            existing_progress.is_completed = False
+            existing_progress.completed_at = None
+            self.db.commit()
+            
+            # Update overall course progress
+            self._update_course_progress(user_id, lesson.module.course_id)
+            
+            return True
+        
+        return False
+    
+    def get_user_lesson_progress(self, user_id: str, lesson_id: UUID) -> Optional[UserProgress]:
+        """Get user's progress for a specific lesson"""
+        return self.db.query(UserProgress).filter(
+            and_(
+                UserProgress.user_id == user_id,
+                UserProgress.lesson_id == lesson_id
+            )
+        ).first()
     
     def get_user_course_progress(self, user_id: str, course_id: str) -> Optional[UserProgress]:
         """Get user's progress for a specific course"""

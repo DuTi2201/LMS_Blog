@@ -97,23 +97,29 @@ export interface ModuleData {
 export interface Lesson {
   id: string;
   title: string;
-  content: string;
+  description?: string;
+  instructor_name?: string;
+  zoom_link?: string;
+  quiz_link?: string;
+  notification?: string;
   order_index: number;
-  lesson_type: string;
-  video_url?: string;
-  duration?: number;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
   module_id: string;
+  attachments?: any[];
 }
 
 export interface LessonData {
   title: string;
-  content: string;
+  description?: string;
+  instructor_name?: string;
+  zoom_link?: string;
+  quiz_link?: string;
+  notification?: string;
   order_index: number;
-  lesson_type?: string;
-  video_url?: string;
-  duration?: number;
+  is_active?: boolean;
+  module_id?: string;
 }
 
 export interface Category {

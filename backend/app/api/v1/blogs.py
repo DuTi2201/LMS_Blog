@@ -224,29 +224,8 @@ def update_blog_post(
     blog_service: BlogService = Depends(get_blog_service)
 ):
     """Update blog post"""
-    existing_post = blog_service.get_blog_post_by_id(post_id)
-    if not existing_post:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Blog post not found")
-
-    # Allow author or admin/instructor to update
-    if (current_user.id != existing_post.author_id and 
-        current_user.role not in [UserRole.ADMIN, UserRole.INSTRUCTOR]):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to update this post"
-        )
-
-    try:
-        updated_post = blog_service.update_post(post_id=post_id, post_update=post_update, user_id=current_user.id)
-        return updated_post
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        # Log the full error for debugging
-        import traceback
-        logger.error(f"Error updating post {post_id}: {e}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    updated_post = blog_service.update_post(post_id=post_id, post_update=post_update, user_id=current_user.id)
+    return updated_post
 
 
 @router.delete("/{post_id}")
@@ -256,22 +235,6 @@ def delete_blog_post(
     blog_service: BlogService = Depends(get_blog_service)
 ):
     """Delete blog post"""
-    # Get the existing post
-    existing_post = blog_service.get_blog_post_by_id(post_id)
-    if not existing_post:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Blog post not found"
-        )
-    
-    # Check permissions: only author or admin can delete
-    if (current_user.id != existing_post.author_id and 
-        current_user.role != UserRole.ADMIN):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to delete this post"
-        )
-    
     success = blog_service.delete_post(post_id, current_user.id)
     if not success:
         raise HTTPException(

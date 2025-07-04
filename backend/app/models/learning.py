@@ -63,10 +63,12 @@ class Lesson(Base):
     title = Column(String(500), nullable=False)
     description = Column(Text, nullable=True)
     lesson_date = Column(DateTime(timezone=True), nullable=True)
-    instructor_name = Column(String(255), nullable=True)
-    zoom_link = Column(String(500), nullable=True)
-    quiz_link = Column(String(500), nullable=True)
+    instructor = Column(String(255), nullable=True)  # Changed from instructor_name to instructor
+    zoom_link = Column(String(500), nullable=True)  # Changed from zoom_link to match frontend zoomLink
+    quiz_link = Column(String(500), nullable=True)  # Changed from quiz_link to match frontend quizLink
     notification = Column(Text, nullable=True)
+    duration = Column(Integer, nullable=True)  # in minutes
+    video_url = Column(String(500), nullable=True)
     order_index = Column(Integer, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -80,7 +82,7 @@ class Lesson(Base):
     attachments = relationship("LessonAttachment", back_populates="lesson", cascade="all, delete-orphan")
     
     def __repr__(self):
-        return f"<Lesson(id={self.id}, title='{self.title}', type='{self.lesson_type}')>"
+        return f"<Lesson(id={self.id}, title='{self.title}', instructor='{self.instructor}')>"
 
 
 class LessonAttachment(Base):
@@ -88,7 +90,7 @@ class LessonAttachment(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     name = Column(String(255), nullable=False)
-    file_url = Column(String(500), nullable=False)
+    url = Column(String(500), nullable=False)  # Changed from file_url to url to match frontend
     file_size = Column(Integer, nullable=True)  # in bytes
     file_type = Column(String(100), nullable=True)
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -100,7 +102,7 @@ class LessonAttachment(Base):
     lesson = relationship("Lesson", back_populates="attachments")
     
     def __repr__(self):
-        return f"<LessonAttachment(id={self.id}, filename='{self.filename}', lesson_id={self.lesson_id})>"
+        return f"<LessonAttachment(id={self.id}, name='{self.name}', lesson_id={self.lesson_id})>"
 
 
 class UserEnrollment(Base):
