@@ -207,33 +207,43 @@ export default function LearningPathPage() {
       }
 
       // Update local state with API response
-      const updatedModules = selectedCourse.modules.map(module => {
-        if (module.id === currentModuleId) {
-          const currentLessons = module.lessons || []
-          const updatedLessons = editingLesson
-            ? currentLessons.map(lesson =>
-                lesson.id === editingLesson.id ? {
-                  ...savedLesson,
-                  date: savedLesson.created_at,
-                  instructor: selectedCourse.instructor?.full_name,
-                  zoomLink: undefined,
-                  quizLink: undefined,
-                  attachments: [],
-                  notification: undefined
-                } : lesson
-              )
-            : [
-                ...currentLessons,
-                {
-                  ...savedLesson,
-                  date: savedLesson.created_at,
-                  instructor: selectedCourse.instructor?.full_name,
-                  zoomLink: undefined,
-                  quizLink: undefined,
-                  attachments: [],
-                  notification: undefined
-                }
-              ]
+       const updatedModules = selectedCourse.modules.map(module => {
+         if (module.id === currentModuleId) {
+           const currentLessons = module.lessons || []
+           const updatedLessons = editingLesson
+             ? currentLessons.map(lesson =>
+                 lesson.id === editingLesson.id ? {
+                   ...savedLesson,
+                   date: new Date(savedLesson.created_at).toLocaleDateString('en-US', {
+                     weekday: 'long',
+                     year: 'numeric',
+                     month: 'long',
+                     day: 'numeric'
+                   }),
+                   instructor: selectedCourse.instructor?.full_name,
+                   zoomLink: undefined,
+                   quizLink: undefined,
+                   attachments: [],
+                   notification: undefined
+                 } : lesson
+               )
+             : [
+                 ...currentLessons,
+                 {
+                   ...savedLesson,
+                   date: new Date(savedLesson.created_at).toLocaleDateString('en-US', {
+                     weekday: 'long',
+                     year: 'numeric',
+                     month: 'long',
+                     day: 'numeric'
+                   }),
+                   instructor: selectedCourse.instructor?.full_name,
+                   zoomLink: undefined,
+                   quizLink: undefined,
+                   attachments: [],
+                   notification: undefined
+                 }
+               ]
           
           return { ...module, lessons: updatedLessons }
         }
@@ -294,7 +304,7 @@ export default function LearningPathPage() {
         
         // Update selected course if it's the one being edited
         if (selectedCourse?.id === editingCourse.id) {
-          setSelectedCourse({ ...savedCourse, modules: selectedCourse.modules })
+          setSelectedCourse({ ...savedCourse, modules: selectedCourse.modules || [] })
         }
       } else {
         // Create new course
@@ -565,27 +575,38 @@ export default function LearningPathPage() {
             let savedModule: Module
             
             if (editingModule) {
-              // Update existing module
-              savedModule = await apiClient.updateModule(editingModule.id, moduleData)
-            } else {
-              // Create new module
-              savedModule = await apiClient.createModule(selectedCourse.id, moduleData)
-            }
-
-            // Update local state with API response
-            const currentModules = selectedCourse.modules || []
-            const updatedModules = editingModule
-              ? currentModules.map((m) =>
-                  m.id === editingModule.id ? { ...savedModule, lessons: m.lessons, lessonCount: m.lessons?.length || 0 } : m
-                )
-              : [
-                  ...currentModules,
-                  { 
-                    ...savedModule, 
-                    lessons: [],
-                    lessonCount: 0
-                  },
-                ]
+               // Update existing module
+               savedModule = await apiClient.updateModule(editingModule.id, {
+                 ...moduleData,
+                 order_index: editingModule.order_index
+               })
+             } else {
+               // Create new module
+               const currentModules = selectedCourse.modules || []
+               savedModule = await apiClient.createModule(selectedCourse.id, {
+                 ...moduleData,
+                 order_index: currentModules.length
+               })
+             }
+ 
+             // Update local state with API response
+             const currentModules = selectedCourse.modules || []
+             const updatedModules = editingModule
+               ? currentModules.map((m) =>
+                   m.id === editingModule.id ? { 
+                     ...savedModule, 
+                     lessons: m.lessons || [], 
+                     lessonCount: m.lessons?.length || 0 
+                   } : m
+                 )
+               : [
+                   ...currentModules,
+                   { 
+                     ...savedModule, 
+                     lessons: [],
+                     lessonCount: 0
+                   },
+                 ]
 
             const updatedCourse = { ...selectedCourse, modules: updatedModules }
             setCourses(courses.map((c) => (c.id === updatedCourse.id ? updatedCourse : c)))
