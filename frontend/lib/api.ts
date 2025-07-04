@@ -97,23 +97,29 @@ export interface ModuleData {
 export interface Lesson {
   id: string;
   title: string;
-  content: string;
+  description?: string;
+  instructor_name?: string;
+  zoom_link?: string;
+  quiz_link?: string;
+  notification?: string;
   order_index: number;
-  lesson_type: string;
-  video_url?: string;
-  duration?: number;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
   module_id: string;
+  attachments?: any[];
 }
 
 export interface LessonData {
   title: string;
-  content: string;
+  description?: string;
+  instructor_name?: string;
+  zoom_link?: string;
+  quiz_link?: string;
+  notification?: string;
   order_index: number;
-  lesson_type?: string;
-  video_url?: string;
-  duration?: number;
+  is_active?: boolean;
+  module_id?: string;
 }
 
 export interface Category {
@@ -354,7 +360,7 @@ class ApiClient {
 
   // Blog methods
   async getBlogPosts(skip: number = 0, limit: number = 10): Promise<BlogPost[]> {
-    return this.request<BlogPost[]>(`/api/v1/blogs/?skip=${skip}&limit=${limit}`, {}, false);
+    return this.request<BlogPost[]>(`/api/v1/blogs?skip=${skip}&limit=${limit}`, {}, false);
   }
 
   async getBlogPost(id: string): Promise<BlogPost> {
@@ -362,7 +368,7 @@ class ApiClient {
   }
 
   async createBlogPost(data: BlogPostData): Promise<BlogPost> {
-    return this.request<BlogPost>('/api/v1/blogs/', {
+    return this.request<BlogPost>('/api/v1/blogs', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -382,15 +388,15 @@ class ApiClient {
   }
 
   async getBlogCategories(): Promise<Category[]> {
-    return this.request<Category[]>('/api/v1/blog-categories/', {}, false);
+    return this.request<Category[]>('/api/v1/blog-categories', {}, false);
   }
 
   async getBlogTags(): Promise<Tag[]> {
-    return this.request<Tag[]>('/api/v1/blog-tags/', {}, false);
+    return this.request<Tag[]>('/api/v1/blog-tags', {}, false);
   }
 
   async createBlogTag(tagData: { name: string }): Promise<Tag> {
-    return this.request<Tag>('/api/v1/blog-tags/', {
+    return this.request<Tag>('/api/v1/blog-tags', {
       method: 'POST',
       body: JSON.stringify(tagData)
     });
@@ -398,7 +404,7 @@ class ApiClient {
 
   // Learning methods
   async getCourses(skip: number = 0, limit: number = 10): Promise<Course[]> {
-    return this.request<Course[]>(`/api/v1/courses/?skip=${skip}&limit=${limit}`, {}, false);
+    return this.request<Course[]>(`/api/v1/courses?skip=${skip}&limit=${limit}`, {}, false);
   }
 
   async getEnrolledCourses(skip: number = 0, limit: number = 10): Promise<Course[]> {
@@ -406,11 +412,11 @@ class ApiClient {
   }
 
   async getCourse(id: string): Promise<Course> {
-    return this.request<Course>(`/api/v1/courses/${id}/`);
+    return this.request<Course>(`/api/v1/courses/${id}`);
   }
 
   async createCourse(courseData: CourseData): Promise<Course> {
-    return this.request<Course>('/api/v1/courses/', {
+    return this.request<Course>('/api/v1/courses', {
       method: 'POST',
       body: JSON.stringify(courseData),
     });
@@ -430,11 +436,11 @@ class ApiClient {
   }
 
   async getModules(courseId: string): Promise<Module[]> {
-    return this.request<Module[]>(`/api/v1/courses/${courseId}/modules/`);
+    return this.request<Module[]>(`/api/v1/courses/${courseId}/modules`);
   }
 
   async createModule(courseId: string, moduleData: ModuleData): Promise<Module> {
-    return this.request<Module>(`/api/v1/courses/${courseId}/modules/`, {
+    return this.request<Module>(`/api/v1/courses/${courseId}/modules`, {
       method: 'POST',
       body: JSON.stringify(moduleData),
     });
@@ -454,12 +460,12 @@ class ApiClient {
   }
 
   async getLessons(moduleId: string): Promise<Lesson[]> {
-    const response = await this.request<{items: Lesson[], total: number}>(`/api/v1/modules/${moduleId}/lessons/`);
+    const response = await this.request<{items: Lesson[], total: number}>(`/api/v1/modules/${moduleId}/lessons`);
     return response.items;
   }
 
   async createLesson(moduleId: string, lessonData: LessonData): Promise<Lesson> {
-    return this.request<Lesson>(`/api/v1/modules/${moduleId}/lessons/`, {
+    return this.request<Lesson>(`/api/v1/modules/${moduleId}/lessons`, {
       method: 'POST',
       body: JSON.stringify(lessonData),
     });
@@ -480,7 +486,7 @@ class ApiClient {
 
   // User management methods
   async getUsers(skip: number = 0, limit: number = 100): Promise<User[]> {
-    return this.request<User[]>(`/api/v1/users/?skip=${skip}&limit=${limit}`);
+    return this.request<User[]>(`/api/v1/users?skip=${skip}&limit=${limit}`);
   }
 
   async getUser(id: string): Promise<User> {
@@ -529,7 +535,7 @@ class ApiClient {
   }
 
   async enrollUserInCourse(userId: string, courseId: string): Promise<any> {
-    return this.request<any>('/api/v1/enrollments/', {
+    return this.request<any>('/api/v1/enrollments', {
       method: 'POST',
       body: JSON.stringify({ user_id: userId, course_id: courseId }),
     });

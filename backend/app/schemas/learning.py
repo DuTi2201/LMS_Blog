@@ -83,11 +83,9 @@ class CourseResponse(BaseModel):
     estimated_duration: Optional[int] = None
     is_published: bool
     price: float
-    enrollment_count: int = 0
     created_at: datetime
     updated_at: datetime
     instructor_id: UUID
-    modules: Optional[List['ModuleResponse']] = []
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -157,7 +155,7 @@ class ModuleUpdate(BaseModel):
         return v
 
 
-class LessonResponse(BaseModel):
+class LessonResponseOld(BaseModel):
     id: UUID
     title: str
     description: Optional[str] = None
@@ -171,6 +169,9 @@ class LessonResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     module_id: UUID
+    video_url: Optional[str] = None
+    duration: Optional[int] = None
+    attachments: Optional[List[dict]] = None
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -181,118 +182,129 @@ class ModuleResponse(ModuleBase):
     updated_at: datetime
     
     # Related objects
-    lessons: Optional[List[LessonResponse]] = None
+    lessons: Optional[List[LessonResponseOld]] = None
     
     model_config = ConfigDict(from_attributes=True)
 
 
-# Lesson Schemas
+# Lesson Schemas - Updated to match frontend
 class LessonBase(BaseModel):
     title: str
-    content: str
-    order: int
-    module_id: str
-    lesson_type: str = "text"  # text, video, quiz
+    description: Optional[str] = None
+    instructor: Optional[str] = None
+    zoom_link: Optional[str] = None  # Changed from zoomLink to zoom_link for database
+    quiz_link: Optional[str] = None  # Changed from quizLink to quiz_link for database
+    notification: Optional[str] = None
+    duration: Optional[int] = None  # Duration in minutes
     video_url: Optional[str] = None
-    duration_minutes: Optional[int] = None
+    order_index: int = 0
     
     @field_validator("title")
     @classmethod
     def validate_title(cls, v):
-        if len(v.strip()) < 3:
-            raise ValueError("Title must be at least 3 characters long")
+        if len(v.strip()) < 1:
+            raise ValueError("Title must not be empty")
         return v.strip()
     
-    @field_validator("content")
+    @field_validator("order_index")
     @classmethod
-    def validate_content(cls, v):
-        if len(v.strip()) < 10:
-            raise ValueError("Content must be at least 10 characters long")
-        return v.strip()
-    
-    @field_validator("order")
-    @classmethod
-    def validate_order(cls, v):
+    def validate_order_index(cls, v):
         if v < 0:
-            raise ValueError("Order must be a non-negative integer")
+            raise ValueError("Order index must be a non-negative integer")
         return v
+
+
+class LessonCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    instructor: Optional[str] = None
+    zoom_link: Optional[str] = None
+    quiz_link: Optional[str] = None
+    notification: Optional[str] = None
+    duration: Optional[int] = None
+    video_url: Optional[str] = None
+    order_index: int = 0
     
-    @field_validator("lesson_type")
+    @field_validator("title")
     @classmethod
-    def validate_lesson_type(cls, v):
-        allowed_types = ["text", "video", "quiz"]
-        if v not in allowed_types:
-            raise ValueError(f"Lesson type must be one of: {', '.join(allowed_types)}")
+    def validate_title(cls, v):
+        if len(v.strip()) < 1:
+            raise ValueError("Title must not be empty")
+        return v.strip()
+    
+    @field_validator("order_index")
+    @classmethod
+    def validate_order_index(cls, v):
+        if v < 0:
+            raise ValueError("Order index must be a non-negative integer")
         return v
-
-
-class LessonCreate(LessonBase):
-    pass
 
 
 class LessonUpdate(BaseModel):
     title: Optional[str] = None
-    content: Optional[str] = None
-    order: Optional[int] = None
-    lesson_type: Optional[str] = None
+    description: Optional[str] = None
+    instructor: Optional[str] = None
+    zoom_link: Optional[str] = None
+    quiz_link: Optional[str] = None
+    notification: Optional[str] = None
+    duration: Optional[int] = None
     video_url: Optional[str] = None
-    duration_minutes: Optional[int] = None
+    order_index: Optional[int] = None
     
     @field_validator("title")
     @classmethod
     def validate_title(cls, v):
-        if v is not None and len(v.strip()) < 3:
-            raise ValueError("Title must be at least 3 characters long")
+        if v is not None and len(v.strip()) < 1:
+            raise ValueError("Title must not be empty")
         return v.strip() if v else v
     
-    @field_validator("content")
+    @field_validator("order_index")
     @classmethod
-    def validate_content(cls, v):
-        if v is not None and len(v.strip()) < 10:
-            raise ValueError("Content must be at least 10 characters long")
-        return v.strip() if v else v
-    
-    @field_validator("order")
-    @classmethod
-    def validate_order(cls, v):
+    def validate_order_index(cls, v):
         if v is not None and v < 0:
-            raise ValueError("Order must be a non-negative integer")
-        return v
-    
-    @field_validator("lesson_type")
-    @classmethod
-    def validate_lesson_type(cls, v):
-        allowed_types = ["text", "video", "quiz"]
-        if v is not None and v not in allowed_types:
-            raise ValueError(f"Lesson type must be one of: {', '.join(allowed_types)}")
+            raise ValueError("Order index must be a non-negative integer")
         return v
 
 
-class LessonResponse(LessonBase):
-    id: str
+class LessonResponse(BaseModel):
+    id: UUID
+    title: str
+    description: Optional[str] = None
+    instructor: Optional[str] = None
+    zoom_link: Optional[str] = None
+    quiz_link: Optional[str] = None
+    notification: Optional[str] = None
+    duration: Optional[int] = None  # Duration in minutes
+    video_url: Optional[str] = None
+    order_index: int
+    is_active: bool
     created_at: datetime
     updated_at: datetime
+    module_id: UUID
+    
+    # Frontend compatibility fields (camelCase versions)
+    zoomLink: Optional[str] = None
+    quizLink: Optional[str] = None
     
     # Related objects
     attachments: Optional[List[dict]] = None  # Will be populated with attachment data
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Lesson Attachment Schemas
 class LessonAttachmentBase(BaseModel):
-    title: str
-    file_url: str
-    file_type: str
-    file_size: int
-    lesson_id: str
+    name: str  # Changed from title to name to match frontend
+    url: str   # Changed from file_url to url to match frontend and database
+    file_type: Optional[str] = None
+    file_size: Optional[int] = None
+    lesson_id: UUID
     
-    @field_validator("title")
+    @field_validator("name")
     @classmethod
-    def validate_title(cls, v):
-        if len(v.strip()) < 3:
-            raise ValueError("Title must be at least 3 characters long")
+    def validate_name(cls, v):
+        if len(v.strip()) < 1:
+            raise ValueError("Name must not be empty")
         return v.strip()
 
 
@@ -301,21 +313,21 @@ class LessonAttachmentCreate(LessonAttachmentBase):
 
 
 class LessonAttachmentUpdate(BaseModel):
-    title: Optional[str] = None
-    file_url: Optional[str] = None
+    name: Optional[str] = None  # Changed from title to name
+    url: Optional[str] = None   # Changed from file_url to url
     file_type: Optional[str] = None
     file_size: Optional[int] = None
     
-    @field_validator("title")
+    @field_validator("name")
     @classmethod
-    def validate_title(cls, v):
-        if v is not None and len(v.strip()) < 3:
-            raise ValueError("Title must be at least 3 characters long")
+    def validate_name(cls, v):
+        if v is not None and len(v.strip()) < 1:
+            raise ValueError("Name must not be empty")
         return v.strip() if v else v
 
 
 class LessonAttachmentResponse(LessonAttachmentBase):
-    id: str
+    id: UUID
     created_at: datetime
     updated_at: datetime
     
@@ -375,6 +387,16 @@ class CourseListResponse(BaseModel):
     page: int
     size: int
     pages: int
+
+
+# User Progress Schemas
+class UserProgressResponse(BaseModel):
+    lesson_id: UUID
+    user_id: UUID
+    is_completed: bool
+    completed_at: Optional[datetime] = None
+    
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Course Search Schema

@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from ...core.database import get_db
 from ...schemas.learning import (
     LessonCreate, LessonUpdate, LessonResponse,
-    LessonAttachmentCreate, LessonAttachmentResponse
+    LessonAttachmentCreate, LessonAttachmentResponse,
+    UserProgressResponse
 )
 from ...services.learning_service import LearningService
 from ...services.file_service import FileService
@@ -123,25 +124,12 @@ def create_lesson(
     learning_service: LearningService = Depends(get_learning_service)
 ):
     """Create new lesson (Instructor+ only)"""
-    # Check if module exists and user has permission
-    module = learning_service.get_module_by_id(lesson_create.module_id)
-    if not module:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Module not found"
-        )
-    
-    # Check permissions: only course instructor or admin can create lessons
-    course = module.course
-    if (current_user.id != course.instructor_id and 
-        current_user.role != UserRole.ADMIN):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to create lesson in this module"
-        )
-    
     try:
-        lesson = learning_service.create_lesson(lesson_create)
+        lesson = learning_service.create_lesson(
+            lesson_create=lesson_create,
+            module_id=lesson_create.module_id,
+            user_id=current_user.id
+        )
         return lesson
     except ValueError as e:
         raise HTTPException(
@@ -158,26 +146,12 @@ def update_lesson(
     learning_service: LearningService = Depends(get_learning_service)
 ):
     """Update lesson"""
-    # Get the existing lesson
-    existing_lesson = learning_service.get_lesson_by_id(lesson_id)
-    if not existing_lesson:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Lesson not found"
-        )
-    
-    # Check permissions: only course instructor or admin can update
-    module = existing_lesson.module
-    course = module.course
-    if (current_user.id != course.instructor_id and 
-        current_user.role != UserRole.ADMIN):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to update this lesson"
-        )
-    
     try:
-        lesson = learning_service.update_lesson(lesson_id, lesson_update)
+        lesson = learning_service.update_lesson(
+            lesson_id=lesson_id,
+            lesson_update=lesson_update,
+            user_id=current_user.id
+        )
         return lesson
     except ValueError as e:
         raise HTTPException(
@@ -193,25 +167,10 @@ def delete_lesson(
     learning_service: LearningService = Depends(get_learning_service)
 ):
     """Delete lesson"""
-    # Get the existing lesson
-    existing_lesson = learning_service.get_lesson_by_id(lesson_id)
-    if not existing_lesson:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Lesson not found"
-        )
-    
-    # Check permissions: only course instructor or admin can delete
-    module = existing_lesson.module
-    course = module.course
-    if (current_user.id != course.instructor_id and 
-        current_user.role != UserRole.ADMIN):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to delete this lesson"
-        )
-    
-    success = learning_service.delete_lesson(lesson_id)
+    success = learning_service.delete_lesson(
+        lesson_id=lesson_id,
+        user_id=current_user.id
+    )
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -270,77 +229,33 @@ def complete_lesson(
     learning_service: LearningService = Depends(get_learning_service)
 ):
     """Mark lesson as completed for current user"""
-    lesson = learning_service.get_lesson_by_id(lesson_id)
-    if not lesson:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Lesson not found"
-        )
+    progress = learning_service.mark_lesson_complete(
+        lesson_id=lesson_id,
+        user_id=current_user.id
+    )
     
-    # Check if user is enrolled in the course
-    module = lesson.module
-    course = module.course
-    enrollment = learning_service.get_user_enrollment(current_user.id, course.id)
-    if not enrollment:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User is not enrolled in this course"
-        )
-    
-    try:
-        success = learning_service.complete_lesson(current_user.id, lesson_id)
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Failed to complete lesson"
-            )
-        
-        return {"message": "Lesson completed successfully"}
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+    return progress
 
 
 @router.delete("/{lesson_id}/complete")
 def uncomplete_lesson(
     lesson_id: UUID,
-    current_user: User = Depends(get_active_user),
+    current_user: User = Depends(get_current_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):
-    """Mark lesson as not completed for current user"""
-    lesson = learning_service.get_lesson_by_id(lesson_id)
-    if not lesson:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Lesson not found"
-        )
+    """Mark lesson as uncompleted"""
+    success = learning_service.uncomplete_lesson(
+        lesson_id=lesson_id,
+        user_id=current_user.id
+    )
     
-    # Check if user is enrolled in the course
-    module = lesson.module
-    course = module.course
-    enrollment = learning_service.get_user_enrollment(current_user.id, course.id)
-    if not enrollment:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User is not enrolled in this course"
-        )
-    
-    try:
-        success = learning_service.uncomplete_lesson(current_user.id, lesson_id)
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Failed to uncomplete lesson"
-            )
-        
-        return {"message": "Lesson marked as not completed"}
-    except ValueError as e:
+    if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail="Failed to uncomplete lesson"
         )
+    
+    return {"message": "Lesson uncompleted successfully"}
 
 
 # Lesson Attachments
@@ -391,26 +306,12 @@ def create_lesson_attachment(
     learning_service: LearningService = Depends(get_learning_service)
 ):
     """Create lesson attachment (Instructor+ only)"""
-    # Check if lesson exists and user has permission
-    lesson = learning_service.get_lesson_by_id(lesson_id)
-    if not lesson:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Lesson not found"
-        )
-    
-    # Check permissions: only course instructor or admin can create attachments
-    module = lesson.module
-    course = module.course
-    if (current_user.id != course.instructor_id and 
-        current_user.role != UserRole.ADMIN):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to create attachment for this lesson"
-        )
-    
     try:
-        attachment = learning_service.create_lesson_attachment(lesson_id, attachment_create)
+        attachment = learning_service.create_lesson_attachment(
+            attachment_create=attachment_create,
+            lesson_id=lesson_id,
+            user_id=current_user.id
+        )
         return attachment
     except ValueError as e:
         raise HTTPException(
@@ -454,14 +355,17 @@ async def upload_lesson_attachment(
         
         # Create attachment record
         attachment_create = LessonAttachmentCreate(
-            title=title or file.filename,
-            description=description,
-            file_url=file_info["file_url"],
+            name=title or file.filename,
+            url=file_info["file_url"],
             file_type=file_info["file_type"],
             file_size=file_info["file_size"]
         )
         
-        attachment = learning_service.create_lesson_attachment(lesson_id, attachment_create)
+        attachment = learning_service.create_lesson_attachment(
+            attachment_create=attachment_create,
+            lesson_id=lesson_id,
+            user_id=current_user.id
+        )
         return attachment
     except ValueError as e:
         raise HTTPException(
@@ -504,11 +408,14 @@ async def delete_lesson_attachment(
     
     try:
         # Delete file from storage
-        if attachment.file_url:
-            await file_service.delete_file(attachment.file_url)
+        if attachment.url:
+            await file_service.delete_file(attachment.url)
         
         # Delete attachment record
-        success = learning_service.delete_lesson_attachment(attachment_id)
+        success = learning_service.delete_lesson_attachment(
+            attachment_id=attachment_id,
+            user_id=current_user.id
+        )
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -523,29 +430,28 @@ async def delete_lesson_attachment(
         )
 
 
-@router.get("/{lesson_id}/progress")
+@router.get("/{lesson_id}/progress", response_model=UserProgressResponse)
 def get_lesson_progress(
     lesson_id: UUID,
-    current_user: User = Depends(get_active_user),
+    current_user: User = Depends(get_current_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):
-    """Get current user's progress for lesson"""
-    lesson = learning_service.get_lesson_by_id(lesson_id)
-    if not lesson:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Lesson not found"
+    """Get user's progress for a specific lesson"""
+    progress = learning_service.get_user_lesson_progress(
+        user_id=current_user.id,
+        lesson_id=lesson_id
+    )
+    
+    if not progress:
+        # Return default progress if none exists
+        return UserProgressResponse(
+            id=None,
+            user_id=current_user.id,
+            lesson_id=lesson_id,
+            is_completed=False,
+            progress_percentage=0.0,
+            completed_at=None,
+            last_accessed_at=None
         )
     
-    # Check if user is enrolled in the course
-    module = lesson.module
-    course = module.course
-    enrollment = learning_service.get_user_enrollment(current_user.id, course.id)
-    if not enrollment:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User is not enrolled in this course"
-        )
-    
-    progress = learning_service.get_user_lesson_progress(current_user.id, lesson_id)
     return progress

@@ -33,6 +33,15 @@ interface Lesson extends ApiLesson {
   notification?: string
 }
 
+interface LessonFormData {
+  title: string
+  description?: string
+  instructor_name?: string
+  zoom_link?: string
+  quiz_link?: string
+  notification?: string
+}
+
 export default function LearningPathPage() {
   const [user, setUser] = useState<User | null>(null)
   const [courses, setCourses] = useState<Course[]>([])
@@ -77,11 +86,11 @@ export default function LearningPathPage() {
                 const transformedLessons = lessons?.map(lesson => ({
                   ...lesson,
                   date: lesson.created_at,
-                  instructor: course.instructor?.full_name,
-                  zoomLink: undefined,
-                  quizLink: undefined,
-                  attachments: [],
-                  notification: undefined
+                  instructor: lesson.instructor_name || course.instructor?.full_name,
+                  zoomLink: lesson.zoom_link,
+                  quizLink: lesson.quiz_link,
+                  attachments: lesson.attachments || [],
+                  notification: lesson.notification
                 })) || []
                 return {
                   ...module,
@@ -192,72 +201,93 @@ export default function LearningPathPage() {
     }
   }
 
-  const handleSaveLesson = async (lessonData: any) => {
-    if (!selectedCourse || !currentModuleId) return
+  const handleSaveLesson = async (lessonData: LessonFormData) => {
+    if (!selectedCourse || !currentModuleId) {
+      setError('No course or module selected')
+      return
+    }
+
+    // Validate required fields
+    if (!lessonData.title?.trim()) {
+      setError('Lesson title is required')
+      return
+    }
 
     try {
-      let savedLesson: Lesson
+      // Calculate order for new lessons
+      const currentModule = selectedCourse.modules?.find(m => m.id === currentModuleId)
+      const order_index = editingLesson ? editingLesson.order_index : (currentModule?.lessons?.length || 0) + 1
+
+      // Transform frontend lesson data to backend format (matching database schema)
+      const backendLessonData = {
+        title: lessonData.title.trim(),
+        description: lessonData.description?.trim() || null,
+        instructor_name: lessonData.instructor_name?.trim() || selectedCourse.instructor?.full_name || null,
+        zoom_link: lessonData.zoom_link?.trim() || null,
+        quiz_link: lessonData.quiz_link?.trim() || null,
+        notification: lessonData.notification?.trim() || null,
+        order_index: order_index,
+        is_active: true,
+        module_id: currentModuleId
+      }
+      
+      let apiLesson: ApiLesson
       
       if (editingLesson) {
         // Update existing lesson
-        savedLesson = await apiClient.updateLesson(editingLesson.id, lessonData)
+        apiLesson = await apiClient.updateLesson(editingLesson.id, backendLessonData)
       } else {
         // Create new lesson
-        savedLesson = await apiClient.createLesson(currentModuleId, lessonData)
+        apiLesson = await apiClient.createLesson(currentModuleId, backendLessonData)
+      }
+      
+      // Transform API lesson to UI lesson
+      const savedLesson: Lesson = {
+        ...apiLesson,
+        date: new Date(apiLesson.created_at).toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        }),
+        instructor: apiLesson.instructor_name || selectedCourse.instructor?.full_name,
+        zoomLink: apiLesson.zoom_link,
+        quizLink: apiLesson.quiz_link,
+        attachments: apiLesson.attachments || [],
+        notification: apiLesson.notification
       }
 
-      // Update local state with API response
-       const updatedModules = selectedCourse.modules.map(module => {
-         if (module.id === currentModuleId) {
+      // Update local state with transformed lesson
+      const updatedModules = selectedCourse.modules?.map(module => {
+        if (module.id === currentModuleId) {
            const currentLessons = module.lessons || []
            const updatedLessons = editingLesson
              ? currentLessons.map(lesson =>
-                 lesson.id === editingLesson.id ? {
-                   ...savedLesson,
-                   date: new Date(savedLesson.created_at).toLocaleDateString('en-US', {
-                     weekday: 'long',
-                     year: 'numeric',
-                     month: 'long',
-                     day: 'numeric'
-                   }),
-                   instructor: selectedCourse.instructor?.full_name,
-                   zoomLink: undefined,
-                   quizLink: undefined,
-                   attachments: [],
-                   notification: undefined
-                 } : lesson
+                 lesson.id === editingLesson.id ? savedLesson : lesson
                )
-             : [
-                 ...currentLessons,
-                 {
-                   ...savedLesson,
-                   date: new Date(savedLesson.created_at).toLocaleDateString('en-US', {
-                     weekday: 'long',
-                     year: 'numeric',
-                     month: 'long',
-                     day: 'numeric'
-                   }),
-                   instructor: selectedCourse.instructor?.full_name,
-                   zoomLink: undefined,
-                   quizLink: undefined,
-                   attachments: [],
-                   notification: undefined
-                 }
-               ]
+             : [...currentLessons, savedLesson]
           
-          return { ...module, lessons: updatedLessons }
+          return { 
+            ...module, 
+            lessons: updatedLessons,
+            lessonCount: updatedLessons.length
+          }
         }
         return module
-      })
+      }) || []
 
       const updatedCourse = { ...selectedCourse, modules: updatedModules }
       setSelectedCourse(updatedCourse)
       setCourses(courses.map(c => c.id === selectedCourse.id ? updatedCourse : c))
+      
+      // Reset form state
       setIsLessonFormDialogOpen(false)
+      setEditingLesson(null)
       setCurrentModuleId(null)
+      setError(null)
     } catch (error) {
       console.error('Failed to save lesson:', error)
-      setError('Failed to save lesson')
+      setError(error instanceof Error ? error.message : 'Failed to save lesson')
     }
   }
 
@@ -291,14 +321,19 @@ export default function LearningPathPage() {
 
   const handleSaveCourse = async (courseData: any) => {
     try {
-      let savedCourse: Course
+      let apiCourse: ApiCourse
       
       if (editingCourse) {
         // Update existing course
-        savedCourse = await apiClient.updateCourse(editingCourse.id, courseData)
-        const courseWithModules = { ...savedCourse, modules: savedCourse.modules || [] }
+        apiCourse = await apiClient.updateCourse(editingCourse.id, courseData)
+        const transformedModules: Module[] = (apiCourse.modules || []).map(module => ({
+          ...module,
+          lessons: [],
+          lessonCount: 0
+        }))
+        const savedCourse: Course = { ...apiCourse, modules: transformedModules }
         const updatedCourses = courses.map(c => 
-          c.id === editingCourse.id ? { ...courseWithModules, modules: c.modules } : c
+          c.id === editingCourse.id ? { ...savedCourse, modules: c.modules } : c
         )
         setCourses(updatedCourses)
         
@@ -308,8 +343,13 @@ export default function LearningPathPage() {
         }
       } else {
         // Create new course
-        savedCourse = await apiClient.createCourse(courseData)
-        const newCourse = { ...savedCourse, modules: savedCourse.modules || [] }
+        apiCourse = await apiClient.createCourse(courseData)
+        const transformedModules: Module[] = (apiCourse.modules || []).map(module => ({
+          ...module,
+          lessons: [],
+          lessonCount: 0
+        }))
+        const newCourse: Course = { ...apiCourse, modules: transformedModules }
         setCourses([...courses, newCourse])
         
         // Select the new course if no course is currently selected
@@ -443,12 +483,12 @@ export default function LearningPathPage() {
         </div>
 
         <div className="space-y-4">
-        {user?.role === "admin" && (
-              <Button onClick={handleAddModule}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Module
-              </Button>
-            )}
+          {user?.role === "admin" && (
+            <Button onClick={handleAddModule}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Module
+            </Button>
+          )}
           {selectedCourse.modules?.map((module) => (
             <Card key={module.id} className="overflow-hidden">
               <CardHeader
@@ -572,41 +612,44 @@ export default function LearningPathPage() {
           if (!selectedCourse) return
 
           try {
-            let savedModule: Module
+            let apiModule: any
             
             if (editingModule) {
-               // Update existing module
-               savedModule = await apiClient.updateModule(editingModule.id, {
-                 ...moduleData,
-                 order_index: editingModule.order_index
-               })
-             } else {
-               // Create new module
-               const currentModules = selectedCourse.modules || []
-               savedModule = await apiClient.createModule(selectedCourse.id, {
-                 ...moduleData,
-                 order_index: currentModules.length
-               })
-             }
+              // Update existing module
+              apiModule = await apiClient.updateModule(editingModule.id, {
+                ...moduleData,
+                order_index: editingModule.order_index
+              })
+            } else {
+              // Create new module
+              const currentModules = selectedCourse.modules || []
+              apiModule = await apiClient.createModule(selectedCourse.id, {
+                ...moduleData,
+                order_index: currentModules.length
+              })
+            }
+
+            // Transform API response to local Module type
+            const savedModule: Module = {
+              ...apiModule,
+              lessons: [],
+              lessonCount: 0
+            }
  
-             // Update local state with API response
-             const currentModules = selectedCourse.modules || []
-             const updatedModules = editingModule
-               ? currentModules.map((m) =>
-                   m.id === editingModule.id ? { 
-                     ...savedModule, 
-                     lessons: m.lessons || [], 
-                     lessonCount: m.lessons?.length || 0 
-                   } : m
-                 )
-               : [
-                   ...currentModules,
-                   { 
-                     ...savedModule, 
-                     lessons: [],
-                     lessonCount: 0
-                   },
-                 ]
+            // Update local state with transformed module
+            const currentModules = selectedCourse.modules || []
+            const updatedModules = editingModule
+              ? currentModules.map((m) =>
+                  m.id === editingModule.id ? { 
+                    ...savedModule, 
+                    lessons: m.lessons || [], 
+                    lessonCount: m.lessons?.length || 0 
+                  } : m
+                )
+              : [
+                  ...currentModules,
+                  savedModule,
+                ]
 
             const updatedCourse = { ...selectedCourse, modules: updatedModules }
             setCourses(courses.map((c) => (c.id === updatedCourse.id ? updatedCourse : c)))

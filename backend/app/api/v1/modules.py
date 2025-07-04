@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 
 from ...core.database import get_db
 from ...schemas.learning import (
-    ModuleCreate, ModuleUpdate, ModuleResponse
+    ModuleCreate, ModuleUpdate, ModuleResponse,
+    LessonCreate, LessonResponse
 )
 from ...services.learning_service import LearningService
 from ..deps import (
@@ -54,7 +55,7 @@ def get_modules(
                         detail="Course not found"
                     )
         
-        modules = learning_service.get_modules_by_course(
+        modules = learning_service.get_modules_by_course_id(
             course_id=course_id,
             skip=skip,
             limit=limit
@@ -115,34 +116,13 @@ def get_module(
 @router.post("/", response_model=ModuleResponse, status_code=status.HTTP_201_CREATED)
 def create_module(
     module_create: ModuleCreate,
+    course_id: UUID,
     current_user: User = Depends(get_instructor_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):
     """Create new module (Instructor+ only)"""
-    # Check if course exists and user has permission
-    course = learning_service.get_course_by_id(module_create.course_id)
-    if not course:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Course not found"
-        )
-    
-    # Check permissions: only course instructor or admin can create modules
-    if (current_user.id != course.instructor_id and 
-        current_user.role != UserRole.ADMIN):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to create module in this course"
-        )
-    
-    try:
-        module = learning_service.create_module(module_create)
-        return module
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+    module = learning_service.create_module(course_id, module_create)
+    return module
 
 
 @router.put("/{module_id}", response_model=ModuleResponse)
@@ -153,31 +133,8 @@ def update_module(
     learning_service: LearningService = Depends(get_learning_service)
 ):
     """Update module"""
-    # Get the existing module
-    existing_module = learning_service.get_module_by_id(module_id)
-    if not existing_module:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Module not found"
-        )
-    
-    # Check permissions: only course instructor or admin can update
-    course = existing_module.course
-    if (current_user.id != course.instructor_id and 
-        current_user.role != UserRole.ADMIN):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to update this module"
-        )
-    
-    try:
-        module = learning_service.update_module(module_id, module_update)
-        return module
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+    module = learning_service.update_module(module_id, module_update, current_user.id)
+    return module
 
 
 @router.delete("/{module_id}")
@@ -187,31 +144,7 @@ def delete_module(
     learning_service: LearningService = Depends(get_learning_service)
 ):
     """Delete module"""
-    # Get the existing module
-    existing_module = learning_service.get_module_by_id(module_id)
-    if not existing_module:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Module not found"
-        )
-    
-    # Check permissions: only course instructor or admin can delete
-    course = existing_module.course
-    if (current_user.id != course.instructor_id and 
-        current_user.role != UserRole.ADMIN):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to delete this module"
-        )
-    
-    # Check if module has lessons
-    if hasattr(existing_module, 'lessons') and existing_module.lessons:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete module with lessons. Please delete lessons first."
-        )
-    
-    success = learning_service.delete_module(module_id)
+    success = learning_service.delete_module(module_id, current_user.id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -268,6 +201,49 @@ def get_module_lessons(
         "lessons": lessons,
         "total": len(lessons)
     }
+
+
+@router.post("/{module_id}/lessons", response_model=LessonResponse, status_code=status.HTTP_201_CREATED)
+def create_lesson_in_module(
+    module_id: UUID,
+    lesson_create: LessonCreate,
+    current_user: User = Depends(get_instructor_user),
+    learning_service: LearningService = Depends(get_learning_service)
+):
+    """Create new lesson in module (Instructor+ only)"""
+    # Check if module exists and user has permission
+    module = learning_service.get_module_by_id(module_id)
+    if not module:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Module not found"
+        )
+    
+    # Check permissions: only course instructor or admin can create lessons
+    course = module.course
+    if (current_user.id != course.instructor_id and 
+        current_user.role != UserRole.ADMIN):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions to create lesson in this module"
+        )
+    
+    # Set the module_id from URL parameter (convert UUID to string)
+    lesson_create.module_id = str(module_id)
+    
+    try:
+        lesson = learning_service.create_lesson(lesson_create, module_id, current_user.id)
+        return lesson
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
 
 @router.post("/{module_id}/reorder")

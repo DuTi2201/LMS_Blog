@@ -151,30 +151,8 @@ def update_course(
     learning_service: LearningService = Depends(get_learning_service)
 ):
     """Update course"""
-    # Get the existing course
-    existing_course = learning_service.get_course_by_id(course_id)
-    if not existing_course:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Course not found"
-        )
-    
-    # Check permissions: only instructor or admin can update
-    if (current_user.id != existing_course.instructor_id and 
-        current_user.role != UserRole.ADMIN):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to update this course"
-        )
-    
-    try:
-        course = learning_service.update_course(course_id, course_update)
-        return course
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+    course = learning_service.update_course(course_id, course_update, current_user.id)
+    return course
 
 
 @router.delete("/{course_id}")
@@ -184,31 +162,7 @@ def delete_course(
     learning_service: LearningService = Depends(get_learning_service)
 ):
     """Delete course"""
-    # Get the existing course
-    existing_course = learning_service.get_course_by_id(course_id)
-    if not existing_course:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Course not found"
-        )
-    
-    # Check permissions: only instructor or admin can delete
-    if (current_user.id != existing_course.instructor_id and 
-        current_user.role != UserRole.ADMIN):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to delete this course"
-        )
-    
-    # Check if course has enrollments
-    enrollments = learning_service.get_course_enrollments(course_id)
-    if enrollments:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete course with active enrollments"
-        )
-    
-    success = learning_service.delete_course(course_id)
+    success = learning_service.delete_course(course_id, current_user.id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -225,39 +179,11 @@ def enroll_in_course(
     learning_service: LearningService = Depends(get_learning_service)
 ):
     """Enroll current user in course"""
-    # Check if course exists and is published
-    course = learning_service.get_course_by_id(course_id)
-    if not course:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Course not found"
-        )
-    
-    if not course.is_published:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot enroll in unpublished course"
-        )
-    
-    # Check if user is already enrolled
-    existing_enrollment = learning_service.get_user_enrollment(current_user.id, course_id)
-    if existing_enrollment:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User is already enrolled in this course"
-        )
-    
-    try:
-        enrollment_create = UserEnrollmentCreate(course_id=course_id)
-        enrollment = learning_service.enroll_user_in_course(
-            enrollment_create, user_id=current_user.id
-        )
-        return enrollment
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+    enrollment_create = UserEnrollmentCreate(course_id=course_id)
+    enrollment = learning_service.enroll_user(
+        enrollment_create, user_id=current_user.id
+    )
+    return enrollment
 
 
 @router.delete("/{course_id}/enroll")
@@ -267,15 +193,7 @@ def unenroll_from_course(
     learning_service: LearningService = Depends(get_learning_service)
 ):
     """Unenroll current user from course"""
-    # Check if user is enrolled
-    enrollment = learning_service.get_user_enrollment(current_user.id, course_id)
-    if not enrollment:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User is not enrolled in this course"
-        )
-    
-    success = learning_service.unenroll_user_from_course(current_user.id, course_id)
+    success = learning_service.unenroll_user(course_id, current_user.id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -294,22 +212,6 @@ def get_course_enrollments(
     learning_service: LearningService = Depends(get_learning_service)
 ):
     """Get course enrollments (Instructor/Admin only)"""
-    # Get the course
-    course = learning_service.get_course_by_id(course_id)
-    if not course:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Course not found"
-        )
-    
-    # Check permissions: only instructor or admin can view enrollments
-    if (current_user.id != course.instructor_id and 
-        current_user.role != UserRole.ADMIN):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to view course enrollments"
-        )
-    
     enrollments = learning_service.get_course_enrollments(
         course_id=course_id,
         skip=skip,
@@ -326,14 +228,6 @@ def get_course_progress(
     learning_service: LearningService = Depends(get_learning_service)
 ):
     """Get current user's progress in course"""
-    # Check if user is enrolled
-    enrollment = learning_service.get_user_enrollment(current_user.id, course_id)
-    if not enrollment:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User is not enrolled in this course"
-        )
-    
     progress = learning_service.get_user_course_progress(current_user.id, course_id)
     return progress
 
@@ -345,31 +239,8 @@ def publish_course(
     learning_service: LearningService = Depends(get_learning_service)
 ):
     """Publish course"""
-    # Get the existing course
-    existing_course = learning_service.get_course_by_id(course_id)
-    if not existing_course:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Course not found"
-        )
-    
-    # Check permissions: only instructor or admin can publish
-    if (current_user.id != existing_course.instructor_id and 
-        current_user.role != UserRole.ADMIN):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to publish this course"
-        )
-    
-    if existing_course.is_published:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Course is already published"
-        )
-    
-    # Publish the course
     course_update = CourseUpdate(is_published=True)
-    course = learning_service.update_course(course_id, course_update)
+    course = learning_service.update_course(course_id, course_update, current_user.id)
     
     return {"message": "Course published successfully"}
 
@@ -381,31 +252,8 @@ def unpublish_course(
     learning_service: LearningService = Depends(get_learning_service)
 ):
     """Unpublish course"""
-    # Get the existing course
-    existing_course = learning_service.get_course_by_id(course_id)
-    if not existing_course:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Course not found"
-        )
-    
-    # Check permissions: only instructor or admin can unpublish
-    if (current_user.id != existing_course.instructor_id and 
-        current_user.role != UserRole.ADMIN):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to unpublish this course"
-        )
-    
-    if not existing_course.is_published:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Course is already unpublished"
-        )
-    
-    # Unpublish the course
     course_update = CourseUpdate(is_published=False)
-    course = learning_service.update_course(course_id, course_update)
+    course = learning_service.update_course(course_id, course_update, current_user.id)
     
     return {"message": "Course unpublished successfully"}
 
@@ -521,11 +369,8 @@ def create_course_module(
             detail="Not enough permissions to create modules for this course"
         )
     
-    # Set course_id in module data
-    module_data.course_id = course_id
-    
     try:
-        module = learning_service.create_module(module_data)
+        module = learning_service.create_module(course_id, module_data)
         return module
     except ValueError as e:
         raise HTTPException(
