@@ -247,9 +247,9 @@ class LearningService:
         ).limit(limit).all()
     
     # Module Methods
-    def create_module(self, module_create: ModuleCreate, course_id: str, user_id: str) -> Module:
+    def create_module(self, course_id: str, module_create: ModuleCreate) -> Module:
         """Create a new module"""
-        # Check if course exists and user has permission
+        # Check if course exists
         course = self.get_course_by_id(course_id)
         if not course:
             raise HTTPException(
@@ -257,23 +257,20 @@ class LearningService:
                 detail="Course not found"
             )
         
-        if course.instructor_id != user_id:
-            # TODO: Add admin role check
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to add modules to this course"
-            )
-        
-        # Get next order number
-        max_order = self.db.query(func.max(Module.order_index)).filter(
-            Module.course_id == course_id
-        ).scalar() or 0
+        # Get next order number if not provided
+        order_index = module_create.order_index
+        if order_index is None:
+            max_order = self.db.query(func.max(Module.order_index)).filter(
+                Module.course_id == course_id
+            ).scalar() or 0
+            order_index = max_order + 1
         
         db_module = Module(
             title=module_create.title,
             description=module_create.description,
-            order_index=max_order + 1,
-            course_id=course_id
+            order_index=order_index,
+            course_id=course_id,
+            is_published=module_create.is_published
         )
         
         self.db.add(db_module)
@@ -415,12 +412,8 @@ class LearningService:
         
         db_lesson = Lesson(
             title=lesson_create.title,
-            content=lesson_create.content,
-            lesson_type=lesson_create.lesson_type,
-            video_url=lesson_create.video_url,
-            duration=lesson_create.duration,
-            order_index=max_order + 1,
-            is_preview=lesson_create.is_preview,
+            description=lesson_create.content,  # Map content to description
+            order_index=lesson_create.order if hasattr(lesson_create, 'order') else max_order + 1,
             module_id=module_id
         )
         

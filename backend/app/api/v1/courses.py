@@ -521,11 +521,8 @@ def create_course_module(
             detail="Not enough permissions to create modules for this course"
         )
     
-    # Set course_id in module data
-    module_data.course_id = course_id
-    
     try:
-        module = learning_service.create_module(module_data)
+        module = learning_service.create_module(course_id, module_data)
         return module
     except ValueError as e:
         raise HTTPException(

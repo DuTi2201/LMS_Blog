@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 
 from ...core.database import get_db
 from ...schemas.learning import (
-    ModuleCreate, ModuleUpdate, ModuleResponse
+    ModuleCreate, ModuleUpdate, ModuleResponse,
+    LessonCreate, LessonResponse
 )
 from ...services.learning_service import LearningService
 from ..deps import (
@@ -268,6 +269,49 @@ def get_module_lessons(
         "lessons": lessons,
         "total": len(lessons)
     }
+
+
+@router.post("/{module_id}/lessons", response_model=LessonResponse, status_code=status.HTTP_201_CREATED)
+def create_lesson_in_module(
+    module_id: UUID,
+    lesson_create: LessonCreate,
+    current_user: User = Depends(get_instructor_user),
+    learning_service: LearningService = Depends(get_learning_service)
+):
+    """Create new lesson in module (Instructor+ only)"""
+    # Check if module exists and user has permission
+    module = learning_service.get_module_by_id(module_id)
+    if not module:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Module not found"
+        )
+    
+    # Check permissions: only course instructor or admin can create lessons
+    course = module.course
+    if (current_user.id != course.instructor_id and 
+        current_user.role != UserRole.ADMIN):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions to create lesson in this module"
+        )
+    
+    # Set the module_id from URL parameter (convert UUID to string)
+    lesson_create.module_id = str(module_id)
+    
+    try:
+        lesson = learning_service.create_lesson(lesson_create, module_id, current_user.id)
+        return lesson
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
 
 @router.post("/{module_id}/reorder")

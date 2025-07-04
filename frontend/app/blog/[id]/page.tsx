@@ -67,7 +67,18 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
         <div className="container mx-auto px-4 py-8">
           <div className="flex gap-8">
             <aside className="w-80 flex-shrink-0">
-              <Sidebar />
+              <Sidebar 
+                categories={[]}
+                tags={[]}
+                allPosts={[]}
+                selectedCategory={null}
+                selectedTag={null}
+                onCategoryClick={() => {}}
+                onTagClick={() => {}}
+                onClearFilters={() => {}}
+                setSelectedCategory={() => {}}
+                setSelectedTag={() => {}}
+              />
             </aside>
             <main className="flex-1 max-w-4xl">
               <div className="bg-white rounded-lg shadow-sm p-8">
@@ -97,7 +108,18 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
         <div className="container mx-auto px-4 py-8">
           <div className="flex gap-8">
             <aside className="w-80 flex-shrink-0">
-              <Sidebar />
+              <Sidebar 
+                categories={[]}
+                tags={[]}
+                allPosts={[]}
+                selectedCategory={null}
+                selectedTag={null}
+                onCategoryClick={() => {}}
+                onTagClick={() => {}}
+                onClearFilters={() => {}}
+                setSelectedCategory={() => {}}
+                setSelectedTag={() => {}}
+              />
             </aside>
             <main className="flex-1 max-w-4xl">
               <div className="bg-white rounded-lg shadow-sm p-8 text-center">
@@ -119,7 +141,18 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
         <div className="container mx-auto px-4 py-8">
           <div className="flex gap-8">
             <aside className="w-80 flex-shrink-0">
-              <Sidebar />
+              <Sidebar 
+                categories={[]}
+                tags={[]}
+                allPosts={[]}
+                selectedCategory={null}
+                selectedTag={null}
+                onCategoryClick={() => {}}
+                onTagClick={() => {}}
+                onClearFilters={() => {}}
+                setSelectedCategory={() => {}}
+                setSelectedTag={() => {}}
+              />
             </aside>
             <main className="flex-1 max-w-4xl">
               <div className="bg-white rounded-lg shadow-sm p-8 text-center">
@@ -140,7 +173,18 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
       <div className="container mx-auto px-4 py-8">
         <div className="flex gap-8">
           <aside className="w-80 flex-shrink-0">
-            <Sidebar />
+            <Sidebar 
+              categories={[]}
+              tags={[]}
+              allPosts={[]}
+              selectedCategory={null}
+              selectedTag={null}
+              onCategoryClick={() => {}}
+              onTagClick={() => {}}
+              onClearFilters={() => {}}
+              setSelectedCategory={() => {}}
+              setSelectedTag={() => {}}
+            />
           </aside>
           <main className="flex-1 max-w-4xl">
             <article className="bg-white rounded-lg shadow-sm p-8">
