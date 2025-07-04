@@ -1,114 +1,155 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { apiClient, Category, Tag } from "@/lib/api"
+import { Category, Tag, BlogPost } from "@/lib/api"
 
-export function Sidebar() {
-  const [categories, setCategories] = useState<Category[]>([])
-  const [tags, setTags] = useState<Tag[]>([])
-  const [loading, setLoading] = useState(true)
+interface SidebarProps {
+  categories: Category[]
+  tags: Tag[]
+  allPosts: BlogPost[]
+  selectedCategory: string | null
+  selectedTag: string | null
+  onCategoryClick: (categoryName: string) => void
+  onTagClick: (tagName: string) => void
+  onClearFilters: () => void
+  setSelectedCategory: (category: string | null) => void
+  setSelectedTag: (tag: string | null) => void
+}
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [categoriesResponse, tagsResponse] = await Promise.all([
-          apiClient.getBlogCategories(),
-          apiClient.getBlogTags()
-        ])
-        setCategories(categoriesResponse)
-        setTags(tagsResponse)
-      } catch (error) {
-        console.error('Error fetching sidebar data:', error)
-        // Set empty arrays as fallback
-        setCategories([])
-        setTags([])
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [])
-
+export function Sidebar({
+  categories,
+  tags,
+  allPosts,
+  selectedCategory,
+  selectedTag,
+  onCategoryClick,
+  onTagClick,
+  onClearFilters,
+  setSelectedCategory,
+  setSelectedTag
+}: SidebarProps) {
   return (
     <div className="space-y-6">
-      
-       
-           {/* Hero Section */}
-           <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-12">
-            <div className="max-w-4xl mx-auto px-6 text-center">
-              <h1 className="text-4xl font-bold mb-4">
-                AI Blog Pro Team
-              </h1>
-              <p className="text-lg opacity-90">
-                AI Journey of AIO 2025 - Khám phá hành trình trí tuệ nhân tạo
-              </p>
-            </div>
+      {/* Hero Section */}
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-12">
+        <div className="max-w-4xl mx-auto px-6 text-center">
+          <h1 className="text-4xl font-bold mb-4">
+            AI Blog Pro Team
+          </h1>
+          <p className="text-lg opacity-90">
+            AI Journey of AIO 2025 - Khám phá hành trình trí tuệ nhân tạo
+          </p>
+        </div>
+      </div>
+
+      {/* Categories */}
+      <Card>
+        <CardContent className="p-4">
+          <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            📚 Categories
+          </h3>
+          <div className="space-y-2">
+            {categories.map((category) => {
+              const postCount = allPosts.filter(post => post.category_id === category.id).length
+              return (
+                <button
+                  key={category.id}
+                  onClick={() => onCategoryClick(category.name)}
+                  className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                    selectedCategory === category.name
+                      ? 'bg-blue-100 text-blue-700 font-medium'
+                      : 'hover:bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  <div className="flex justify-between items-center">
+                    <span>{category.name}</span>
+                    <Badge variant="secondary" className="text-xs">
+                      {postCount}
+                    </Badge>
+                  </div>
+                </button>
+              )
+            })}
           </div>
-        
-    
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Categories</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="space-y-2">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="flex justify-between items-center">
-                  <div className="h-4 bg-gray-200 rounded w-2/3 animate-pulse"></div>
-                  <div className="h-5 bg-gray-200 rounded w-8 animate-pulse"></div>
-                </div>
-              ))}
-            </div>
-          ) : categories.length > 0 ? (
-            <div className="space-y-2">
-              {categories.map((category) => (
-                <div key={category.id} className="flex justify-between items-center">
-                  <span className="text-gray-700">{category.name}</span>
-                  <Badge variant="secondary">•</Badge>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-500 text-sm">No categories found</p>
-          )}
         </CardContent>
       </Card>
 
+      {/* Tags */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Tags</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex flex-wrap gap-2">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="h-6 bg-gray-200 rounded w-16 animate-pulse"></div>
-              ))}
-            </div>
-          ) : tags.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {tags.slice(0, 10).map((tag) => (
-                <Badge key={tag.id} variant="outline" className="text-xs">
-                  {tag.name}
-                </Badge>
-              ))}
-              {tags.length > 10 && (
-                <Button variant="ghost" size="sm" className="text-blue-500 p-0 h-auto">
-                  +{tags.length - 10} more
-                </Button>
-              )}
-            </div>
-          ) : (
-            <p className="text-gray-500 text-sm">No tags found</p>
-          )}
+        <CardContent className="p-4">
+          <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            🏷️ Tags
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {tags.map((tag) => {
+              const postCount = allPosts.filter(post => 
+                post.tags.some(postTag => postTag.id === tag.id)
+              ).length
+              return (
+                <button
+                  key={tag.id}
+                  onClick={() => onTagClick(tag.name)}
+                  className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs transition-colors ${
+                    selectedTag === tag.name
+                      ? 'bg-blue-100 text-blue-700 font-medium'
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                  }`}
+                >
+                  #{tag.name}
+                  <Badge variant="secondary" className="text-xs ml-1">
+                    {postCount}
+                  </Badge>
+                </button>
+              )
+            })}
+          </div>
         </CardContent>
       </Card>
+
+      {/* Clear Filters */}
+      {(selectedCategory || selectedTag) && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="space-y-2">
+              <h4 className="font-medium text-gray-900 text-sm">Active Filters:</h4>
+              <div className="space-y-1">
+                {selectedCategory && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Category: <strong>{selectedCategory}</strong></span>
+                    <button
+                      onClick={() => setSelectedCategory(null)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+                {selectedTag && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Tag: <strong>#{selectedTag}</strong></span>
+                    <button
+                      onClick={() => setSelectedTag(null)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+              </div>
+              <Button
+                onClick={onClearFilters}
+                variant="outline"
+                size="sm"
+                className="w-full mt-2"
+              >
+                Clear All Filters
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

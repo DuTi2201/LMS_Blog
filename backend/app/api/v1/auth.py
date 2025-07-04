@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 from ...core.database import get_db
 from ...schemas.user import (
     UserCreate, UserResponse, Token,
-    PasswordReset, PasswordResetConfirm, RefreshTokenRequest
+    PasswordReset, PasswordResetConfirm, RefreshTokenRequest,
+    GoogleTokenRequest, UserCreateByAdmin
 )
 from ...services.auth_service import AuthService
 from ..deps import get_current_user, get_auth_service
@@ -23,6 +24,55 @@ def register(
     """Register a new user"""
     try:
         user = auth_service.create_user(user_create)
+        return user
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@router.post("/google-login", response_model=Token)
+def google_login(
+    google_token: GoogleTokenRequest,
+    auth_service: AuthService = Depends(get_auth_service)
+):
+    """Login with Google OAuth"""
+    try:
+        # Verify Google token and get user info
+        google_user_info = auth_service.verify_google_token(google_token.token)
+        
+        # Authenticate user (check if admin has added them)
+        user = auth_service.authenticate_google_user(google_user_info)
+        
+        # Generate tokens
+        return auth_service.create_tokens(user)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google authentication failed"
+        )
+
+
+@router.post("/admin/create-user", response_model=UserResponse)
+def create_user_by_admin(
+    user_create: UserCreateByAdmin,
+    current_user: User = Depends(get_current_user),
+    auth_service: AuthService = Depends(get_auth_service)
+):
+    """Create user by admin (for Google OAuth users)"""
+    # Check if current user is admin
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can create users"
+        )
+    
+    try:
+        user = auth_service.create_user_by_admin(user_create)
         return user
     except ValueError as e:
         raise HTTPException(

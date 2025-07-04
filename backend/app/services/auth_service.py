@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from fastapi import HTTPException, status
 from datetime import datetime, timedelta
+from google.auth.transport import requests
+from google.oauth2 import id_token
 
 from ..core.security import (
     verify_password, 
@@ -14,7 +16,7 @@ from ..core.security import (
     verify_password_reset_token
 )
 from ..models.user import User, UserRole
-from ..schemas.user import UserCreate, UserUpdate
+from ..schemas.user import UserCreate, UserUpdate, GoogleUserInfo, UserCreateByAdmin
 from ..core.config import settings
 
 
@@ -34,6 +36,10 @@ class AuthService:
         """Get user by username"""
         return self.db.query(User).filter(User.username == username).first()
     
+    def get_user_by_google_id(self, google_id: str) -> Optional[User]:
+        """Get user by Google ID"""
+        return self.db.query(User).filter(User.google_id == google_id).first()
+    
     def get_user_by_email_or_username(self, identifier: str) -> Optional[User]:
         """Get user by email or username"""
         return self.db.query(User).filter(
@@ -49,15 +55,31 @@ class AuthService:
                 detail="Email already registered"
             )
         
-        # Check if username already exists
-        if self.get_user_by_username(user_create.username):
+        # Check if username already exists (only for local auth)
+        if user_create.username and self.get_user_by_username(user_create.username):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Username already taken"
             )
         
+        # Validate auth provider requirements
+        if user_create.auth_provider == "local" and not user_create.password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password is required for local authentication"
+            )
+        
+        if user_create.auth_provider == "google" and not user_create.google_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Google ID is required for Google authentication"
+            )
+        
         # Create new user
-        hashed_password = get_password_hash(user_create.password)
+        hashed_password = None
+        if user_create.password:
+            hashed_password = get_password_hash(user_create.password)
+        
         db_user = User(
             email=user_create.email,
             username=user_create.username,
@@ -66,7 +88,9 @@ class AuthService:
             role=user_create.role,
             is_active=user_create.is_active,
             avatar_url=user_create.avatar_url,
-            bio=user_create.bio
+            bio=user_create.bio,
+            auth_provider=user_create.auth_provider,
+            google_id=user_create.google_id
         )
         
         self.db.add(db_user)
@@ -346,3 +370,96 @@ class AuthService:
         # Apply pagination
         users = query.offset(skip).limit(limit).all()
         return users
+    
+    def verify_google_token(self, token: str) -> GoogleUserInfo:
+        """Verify Google ID token and extract user info"""
+        try:
+            # Verify the token with Google
+            idinfo = id_token.verify_oauth2_token(
+                token, requests.Request(), settings.GOOGLE_CLIENT_ID
+            )
+            
+            # Extract user information
+            google_user_info = GoogleUserInfo(
+                google_id=idinfo['sub'],
+                email=idinfo['email'],
+                full_name=idinfo.get('name', ''),
+                avatar_url=idinfo.get('picture')
+            )
+            
+            return google_user_info
+            
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid Google token"
+            )
+    
+    def authenticate_google_user(self, google_user_info: GoogleUserInfo) -> Optional[User]:
+        """Authenticate user with Google OAuth"""
+        # Check if user exists by email (admin must have added them)
+        user = self.get_user_by_email(google_user_info.email)
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Chưa đăng ký, vui lòng liên hệ admin"
+            )
+        
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User account is deactivated"
+            )
+        
+        # Update user with Google info
+        updated = False
+        
+        if not user.google_id:
+            user.google_id = google_user_info.google_id
+            user.auth_provider = "google"
+            updated = True
+        
+        # Always update full_name and avatar_url from Google account
+        if google_user_info.full_name and google_user_info.full_name != user.full_name:
+            user.full_name = google_user_info.full_name
+            updated = True
+            
+        if google_user_info.avatar_url and google_user_info.avatar_url != user.avatar_url:
+            user.avatar_url = google_user_info.avatar_url
+            updated = True
+        
+        if updated:
+            user.updated_at = datetime.utcnow()
+            self.db.commit()
+            self.db.refresh(user)
+        
+        return user
+    
+    def create_user_by_admin(self, user_create: UserCreateByAdmin) -> User:
+        """Create a new user by admin (for Google OAuth users)"""
+        # Check if email already exists
+        if self.get_user_by_email(user_create.email):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+        
+        # Create new user for Google OAuth
+        db_user = User(
+            email=user_create.email,
+            full_name=user_create.full_name,
+            role=user_create.role,
+            auth_provider="google",
+            is_active=True,
+            is_verified=True  # Google accounts are pre-verified
+        )
+        
+        self.db.add(db_user)
+        self.db.commit()
+        self.db.refresh(db_user)
+        
+        # TODO: Assign courses if course_ids provided
+        # This would require course enrollment logic
+        
+        return db_user

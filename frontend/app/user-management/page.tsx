@@ -19,11 +19,9 @@ interface UserWithCourses extends User {
 }
 
 interface UserFormData {
-  username: string
   email: string
   full_name: string
   role: string
-  password?: string
   courseIds: string[]
 }
 
@@ -38,11 +36,9 @@ export default function UserManagementPage() {
   const [roleFilter, setRoleFilter] = useState<string>("all")
   
   const [formData, setFormData] = useState<UserFormData>({
-    username: "",
     email: "",
     full_name: "",
     role: "user",
-    password: "",
     courseIds: []
   })
 
@@ -92,8 +88,7 @@ export default function UserManagementPage() {
   }
 
   const filteredUsers = users.filter(user => {
-    const matchesSearch = user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.full_name.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesRole = roleFilter === "all" || user.role === roleFilter
     return matchesSearch && matchesRole
@@ -102,11 +97,9 @@ export default function UserManagementPage() {
   const handleCreateUser = () => {
     setEditingUser(null)
     setFormData({
-      username: "",
       email: "",
       full_name: "",
       role: "user",
-      password: "",
       courseIds: []
     })
     setIsDialogOpen(true)
@@ -115,11 +108,9 @@ export default function UserManagementPage() {
   const handleEditUser = (user: UserWithCourses) => {
     setEditingUser(user)
     setFormData({
-      username: user.username,
       email: user.email,
       full_name: user.full_name,
       role: user.role,
-      password: "",
       courseIds: user.enrolledCourses?.map(course => course.id) || []
     })
     setIsDialogOpen(true)
@@ -145,15 +136,10 @@ export default function UserManagementPage() {
       
       if (editingUser) {
         // Update existing user
-        const updateData: any = {
-          username: formData.username,
+        const updateData = {
           email: formData.email,
           full_name: formData.full_name,
           role: formData.role
-        }
-        
-        if (formData.password) {
-          updateData.password = formData.password
         }
         
         savedUser = await apiClient.updateUser(editingUser.id, updateData)
@@ -161,17 +147,13 @@ export default function UserManagementPage() {
         // Update course enrollments
         await updateUserEnrollments(editingUser.id, formData.courseIds)
       } else {
-        // Create new user
+        // Create new user with course assignments
         savedUser = await apiClient.createUser({
-          username: formData.username,
           email: formData.email,
           full_name: formData.full_name,
           role: formData.role,
-          password: formData.password!
+          course_ids: formData.courseIds
         })
-        
-        // Enroll in selected courses
-        await updateUserEnrollments(savedUser.id, formData.courseIds)
       }
       
       setIsDialogOpen(false)
@@ -429,26 +411,15 @@ export default function UserManagementPage() {
             </DialogHeader>
             
             <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="username">Username</Label>
-                  <Input
-                    id="username"
-                    value={formData.username}
-                    onChange={(e) => setFormData({...formData, username: e.target.value})}
-                    placeholder="Enter username"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    placeholder="Enter email"
-                  />
-                </div>
+              <div>
+                <Label htmlFor="email">Email (Google Account)</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  placeholder="Enter Google account email"
+                />
               </div>
               
               <div>
@@ -461,32 +432,18 @@ export default function UserManagementPage() {
                 />
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="role">Role</Label>
-                  <Select value={formData.role} onValueChange={(value) => setFormData({...formData, role: value})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="user">User</SelectItem>
-                      <SelectItem value="instructor">Instructor</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="password">
-                    {editingUser ? 'New Password (leave blank to keep current)' : 'Password'}
-                  </Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) => setFormData({...formData, password: e.target.value})}
-                    placeholder={editingUser ? "Enter new password" : "Enter password"}
-                  />
-                </div>
+              <div>
+                <Label htmlFor="role">Role</Label>
+                <Select value={formData.role} onValueChange={(value) => setFormData({...formData, role: value})}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">User</SelectItem>
+                    <SelectItem value="instructor">Instructor</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               
               <div>

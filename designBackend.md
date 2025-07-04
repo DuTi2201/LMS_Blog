@@ -406,7 +406,7 @@ services:
   backend:
     build: .
     ports:
-      - "8000:8000"
+      - "8001:8001"
     environment:
       - DATABASE_URL=postgresql://user:password@db:5432/lms_db
       - SECRET_KEY=your-secret-key
@@ -584,4 +584,4 @@ Hệ thống backend này được thiết kế để hỗ trợ đầy đủ c�
 - Role: user
 - Quyền: Người dùng thông thường
 
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8001

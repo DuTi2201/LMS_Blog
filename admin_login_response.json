@@ -1,0 +1,1 @@
+{"error":true,"message":"Validation error","details":[{"type":"missing","loc":["body","username"],"msg":"Field required","input":null},{"type":"missing","loc":["body","password"],"msg":"Field required","input":null}],"status_code":422,"path":"/api/v1/auth/login"}

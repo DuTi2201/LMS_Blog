@@ -5,7 +5,7 @@ export interface User {
   id: string;
   email: string;
   full_name: string;
-  username: string;
+  username?: string;
   role: string;
   is_active: boolean;
   is_verified: boolean;
@@ -14,6 +14,8 @@ export interface User {
   last_login_at?: string;
   created_at: string;
   updated_at: string;
+  auth_provider?: string;
+  google_id?: string;
 }
 
 export interface BlogPost {
@@ -159,10 +161,28 @@ class ApiClient {
       headers.Authorization = `Bearer ${this.token}`;
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...options,
+        headers,
+        // Add timeout and better error handling
+        signal: AbortSignal.timeout(30000), // 30 second timeout
+        // Add cache busting to prevent browser cache issues
+        cache: 'no-cache',
+        mode: 'cors',
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          throw new Error('Request timeout. Please check your connection and try again.');
+        }
+        if (error.message.includes('Failed to fetch')) {
+          throw new Error('Network error. Please check your connection and try again.');
+        }
+      }
+      throw error;
+    }
 
     // Handle authentication errors
     if ((response.status === 401 || response.status === 403) && retryOnAuth) {
@@ -187,9 +207,22 @@ class ApiClient {
       }
     }
 
-    if (!response.ok) {
+    // For public endpoints (retryOnAuth = false), skip auth error handling
+    if (!response.ok && !((response.status === 401 || response.status === 403) && !retryOnAuth)) {
       const error = await response.json().catch(() => ({ detail: 'Network error' }));
       throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+
+    // For public endpoints with auth errors, try to get data anyway
+    if ((response.status === 401 || response.status === 403) && !retryOnAuth) {
+      // Clear any invalid tokens
+      this.clearTokens();
+      // Try to parse response anyway, some endpoints might return data
+      try {
+        return response.json();
+      } catch {
+        throw new Error('Unable to access this resource. Please try again later.');
+      }
     }
 
     return response.json();
@@ -266,6 +299,28 @@ class ApiClient {
     return this.getCurrentUser();
   }
 
+  async googleLogin(googleToken: string): Promise<User> {
+    const tokenResponse = await this.request<{ access_token: string, refresh_token: string }>(
+      '/api/v1/auth/google-login',
+      {
+        method: 'POST',
+        body: JSON.stringify({ token: googleToken }),
+      },
+      false // Don't retry on auth error for login
+    );
+
+    this.token = tokenResponse.access_token;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('access_token', tokenResponse.access_token);
+      if (tokenResponse.refresh_token) {
+        localStorage.setItem('refresh_token', tokenResponse.refresh_token);
+      }
+    }
+
+    // After successful login, get user data
+    return this.getCurrentUser();
+  }
+
   async register(email: string, password: string, full_name: string, username?: string) {
     // Generate username from email if not provided
     const finalUsername = username || email.split('@')[0];
@@ -299,11 +354,11 @@ class ApiClient {
 
   // Blog methods
   async getBlogPosts(skip: number = 0, limit: number = 10): Promise<BlogPost[]> {
-    return this.request<BlogPost[]>(`/api/v1/blogs/?skip=${skip}&limit=${limit}`);
+    return this.request<BlogPost[]>(`/api/v1/blogs/?skip=${skip}&limit=${limit}`, {}, false);
   }
 
   async getBlogPost(id: string): Promise<BlogPost> {
-    return this.request<BlogPost>(`/api/v1/blogs/${id}`);
+    return this.request<BlogPost>(`/api/v1/blogs/${id}`, {}, false);
   }
 
   async createBlogPost(data: BlogPostData): Promise<BlogPost> {
@@ -327,11 +382,11 @@ class ApiClient {
   }
 
   async getBlogCategories(): Promise<Category[]> {
-    return this.request<Category[]>('/api/v1/blog-categories/');
+    return this.request<Category[]>('/api/v1/blog-categories/', {}, false);
   }
 
   async getBlogTags(): Promise<Tag[]> {
-    return this.request<Tag[]>('/api/v1/blog-tags/');
+    return this.request<Tag[]>('/api/v1/blog-tags/', {}, false);
   }
 
   async createBlogTag(tagData: { name: string }): Promise<Tag> {
@@ -343,7 +398,7 @@ class ApiClient {
 
   // Learning methods
   async getCourses(skip: number = 0, limit: number = 10): Promise<Course[]> {
-    return this.request<Course[]>(`/api/v1/courses/?skip=${skip}&limit=${limit}`);
+    return this.request<Course[]>(`/api/v1/courses/?skip=${skip}&limit=${limit}`, {}, false);
   }
 
   async getEnrolledCourses(skip: number = 0, limit: number = 10): Promise<Course[]> {
@@ -407,23 +462,20 @@ class ApiClient {
   }
 
   async createUser(userData: {
-    username: string;
     email: string;
     full_name: string;
-    password: string;
     role?: string;
+    course_ids?: string[];
   }): Promise<User> {
-    return this.request<User>('/api/v1/users/', {
+    return this.request<User>('/api/v1/auth/admin/create-user', {
       method: 'POST',
       body: JSON.stringify(userData),
     });
   }
 
   async updateUser(id: string, userData: {
-    username?: string;
     email?: string;
     full_name?: string;
-    password?: string;
     role?: string;
   }): Promise<User> {
     return this.request<User>(`/api/v1/users/${id}`, {
