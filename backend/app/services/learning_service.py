@@ -40,6 +40,9 @@ class LearningService:
         
         self.db.add(db_course)
         self.db.commit()
+        self.db.refresh(db_course)
+        
+        return db_course
     
     def get_lessons_by_module(self, module_id: str, skip: int = 0, limit: int = 50) -> List[Lesson]:
         """Get lessons by module ID"""
@@ -52,9 +55,6 @@ class LearningService:
         return self.db.query(Lesson).order_by(
             Lesson.created_at.desc()
         ).offset(skip).limit(limit).all()
-        self.db.refresh(db_course)
-        
-        return db_course
     
     def get_courses(self, search_params: CourseSearchParams) -> Tuple[List[Course], int]:
         """Get courses with search and pagination"""
