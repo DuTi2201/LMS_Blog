@@ -25,20 +25,25 @@ export default function BlogManagementPage() {
         setError(null)
         
         // Fetch user data
-        const userData = await apiClient.getCurrentUser()
-        setUser(userData as User)
+        const userData: User = await apiClient.getCurrentUser()
+        setUser(userData)
         
         // Fetch blog posts
         const postsData = await apiClient.getBlogPosts()
-        const posts = Array.isArray(postsData) ? postsData : (postsData as { items?: BlogPost[] }).items || []
+        const posts: BlogPost[] = Array.isArray(postsData) ? postsData : (postsData as { items?: BlogPost[] }).items || []
         const postsWithWordCount = posts.map(post => ({
           ...post,
           word_count: calculateWordCount(post.content)
         }))
         setPosts(postsWithWordCount)
-      } catch (err) {
+      } catch (err: unknown) {
         console.error('Error fetching data:', err)
-        setError('Failed to load blog posts')
+        if (err instanceof Error) {
+          setError(`Failed to load blog posts: ${err.message}`)
+        } else {
+          setError('An unknown error occurred while loading blog posts')
+        }
+
       } finally {
         setLoading(false)
       }
@@ -66,35 +71,63 @@ export default function BlogManagementPage() {
     setIsEditorOpen(true)
   }
 
-  const handleEditPost = (post: BlogPost) => {
+  const handleEditPost = (post: BlogPost): void => {
     setEditingPost(post)
     setIsEditorOpen(true)
   }
 
   const calculateWordCount = (content: string): number => {
+    if (!content) return 0
     return content.trim().split(/\s+/).filter(word => word.length > 0).length
   }
 
-  const handleDeletePost = async (postId: string) => {
+  const handleViewPost = (postId: string): void => {
+    window.open(`/blog/${postId}`, '_blank')
+  }
+
+  const handleDeletePost = async (postId: string): Promise<void> => {
+    if (!confirm('Are you sure you want to delete this post?')) {
+      return
+    }
+    
     try {
       await apiClient.deleteBlogPost(postId)
-      setPosts(posts.filter(post => post.id !== postId))
+      setPosts(posts.filter((post: BlogPost) => post.id !== postId))
     } catch (error) {
       console.error('Error deleting post:', error)
+      alert('Failed to delete post. Please try again.')
     }
   }
 
-  const handleSavePost = async (postData: BlogPostData) => {
+  const handleSavePost = async (postData: BlogPostData): Promise<void> => {
     try {
-      const savedPost = await apiClient.createBlogPost(postData)
-      const postWithWordCount = {
-        ...savedPost,
-        word_count: calculateWordCount(savedPost.content)
+      let savedPost: BlogPost
+      
+      if (editingPost) {
+        // Update existing post
+        savedPost = await apiClient.updateBlogPost(editingPost.id, postData)
+        const postWithWordCount: BlogPost = {
+          ...savedPost,
+          word_count: calculateWordCount(savedPost.content)
+        }
+        setPosts(posts.map((post: BlogPost) => 
+          post.id === editingPost.id ? postWithWordCount : post
+        ))
+      } else {
+        // Create new post
+        savedPost = await apiClient.createBlogPost(postData)
+        const postWithWordCount: BlogPost = {
+          ...savedPost,
+          word_count: calculateWordCount(savedPost.content)
+        }
+        setPosts([postWithWordCount, ...posts])
       }
-      setPosts([postWithWordCount, ...posts])
+      
       setIsEditorOpen(false)
+      setEditingPost(null)
     } catch (error) {
       console.error('Error saving post:', error)
+      alert('Failed to save post. Please try again.')
     }
   }
 
@@ -143,7 +176,7 @@ export default function BlogManagementPage() {
               </Button>
             </div>
           ) : (
-            posts.map((post) => (
+            posts.map((post: BlogPost) => (
               <Card key={post.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
@@ -160,7 +193,7 @@ export default function BlogManagementPage() {
                       </div>
                       <div className="flex flex-wrap gap-2 mb-3">
                         {post.category && <Badge variant="outline">{post.category.name}</Badge>}
-                        {post.tags.map((tag) => (
+                        {post.tags.map((tag: { id: string; name: string }) => (
                           <Badge key={tag.id} variant="secondary" className="text-xs">
                             #{tag.name}
                           </Badge>
@@ -169,15 +202,15 @@ export default function BlogManagementPage() {
                     </div>
 
                     <div className="flex space-x-2">
-                      <Button variant="ghost" size="sm">
+                      <Button variant="ghost" size="sm" onClick={() => handleViewPost(post.id)}>
                         <Eye className="w-4 h-4" />
                       </Button>
                       <Button variant="ghost" size="sm" onClick={() => handleEditPost(post)}>
                         <Edit className="w-4 h-4" />
                       </Button>
-                      {(user?.role === "admin" || post.author?.id === user?.id) && (
+                      {(user?.role === "instructor" || post.author?.id === user?.id) && (
                         <Button variant="ghost" size="sm" onClick={() => handleDeletePost(post.id)}>
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-4 h-4 text-red-500" />
                         </Button>
                       )}
                     </div>

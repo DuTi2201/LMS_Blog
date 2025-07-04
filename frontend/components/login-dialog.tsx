@@ -6,20 +6,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { apiClient } from "@/lib/api"
-
-interface User {
-  id: number
-  email: string
-  full_name: string
-  role: string
-  is_active: boolean
-}
+import { apiClient, type User as UserType } from "@/lib/api"
 
 interface LoginDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onLogin: (user: User) => void
+  onLogin: (user: UserType) => void
 }
 
 export function LoginDialog({ open, onOpenChange, onLogin }: LoginDialogProps) {
@@ -41,11 +33,8 @@ export function LoginDialog({ open, onOpenChange, onLogin }: LoginDialogProps) {
     setError("")
 
     try {
-      const response = await apiClient.login(email, password)
-      localStorage.setItem('access_token', response.access_token)
-      
-      const userData = await apiClient.getCurrentUser()
-      onLogin(userData as User)
+      const userData = await apiClient.login(email, password)
+      onLogin(userData)
       onOpenChange(false)
       
       // Reset form
@@ -77,11 +66,8 @@ export function LoginDialog({ open, onOpenChange, onLogin }: LoginDialogProps) {
       await apiClient.register(email, password, fullName)
       
       // Auto login after registration
-      const response = await apiClient.login(email, password)
-      localStorage.setItem('access_token', response.access_token)
-      
-      const userData = await apiClient.getCurrentUser()
-      onLogin(userData as User)
+      const userData = await apiClient.login(email, password)
+      onLogin(userData)
       onOpenChange(false)
       
       // Reset form

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, status, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
@@ -7,6 +7,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 import time
 import logging
 import os
+import traceback
 from contextlib import asynccontextmanager
 
 from .core.config import settings
@@ -89,7 +90,7 @@ if settings.BACKEND_CORS_ORIGINS:
 # Add trusted host middleware for security
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["localhost", "127.0.0.1", "*.localhost"]
+    allowed_hosts=["localhost", "127.0.0.1", "*.localhost", "192.168.2.101"]
 )
 
 
@@ -128,6 +129,23 @@ async def log_requests(request: Request, call_next):
 
 
 # Exception handlers
+@app.exception_handler(HTTPException)
+async def fastapi_http_exception_handler(request: Request, exc: HTTPException):
+    """Handle FastAPI HTTP exceptions"""
+    logger.warning(
+        f"HTTP {exc.status_code} error on {request.method} {request.url.path}: {exc.detail}"
+    )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": True,
+            "message": exc.detail,
+            "status_code": exc.status_code,
+            "path": str(request.url.path)
+        }
+    )
+
+
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     """Handle HTTP exceptions"""
@@ -151,12 +169,32 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     logger.warning(
         f"Validation error on {request.method} {request.url.path}: {exc.errors()}"
     )
+    
+    # Ensure validation errors are JSON serializable
+    try:
+        error_details = exc.errors()
+        # Convert any non-serializable objects to strings
+        serializable_details = []
+        for error in error_details:
+            serializable_error = {}
+            for key, value in error.items():
+                try:
+                    # Test if value is JSON serializable
+                    import json
+                    json.dumps(value)
+                    serializable_error[key] = value
+                except (TypeError, ValueError):
+                    serializable_error[key] = str(value)
+            serializable_details.append(serializable_error)
+    except Exception:
+        serializable_details = [{"message": "Validation error occurred but details could not be serialized"}]
+    
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "error": True,
             "message": "Validation error",
-            "details": exc.errors(),
+            "details": serializable_details,
             "status_code": 422,
             "path": str(request.url.path)
         }
@@ -166,17 +204,38 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     """Handle general exceptions"""
+    # Log detailed error information
+    error_traceback = traceback.format_exc()
     logger.error(
-        f"Unhandled exception on {request.method} {request.url.path}: {str(exc)}",
-        exc_info=True
+        f"Unhandled exception on {request.method} {request.url.path}:\n"
+        f"Exception: {type(exc).__name__}: {str(exc)}\n"
+        f"Traceback:\n{error_traceback}"
     )
+    
+    # Also log request body if available
+    try:
+        if hasattr(request, '_body'):
+            body = await request.body()
+            if body:
+                logger.error(f"Request body: {body.decode('utf-8')[:1000]}")
+    except Exception as e:
+        logger.error(f"Could not log request body: {e}")
+    
+    # Ensure all values are JSON serializable
+    try:
+        detail_str = str(exc)
+    except Exception:
+        detail_str = f"{type(exc).__name__}: <unable to convert to string>"
+    
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "error": True,
             "message": "Internal server error",
             "status_code": 500,
-            "path": str(request.url.path)
+            "path": str(request.url.path),
+            "detail": detail_str,
+            "traceback": error_traceback if settings.DEBUG else None
         }
     )
 

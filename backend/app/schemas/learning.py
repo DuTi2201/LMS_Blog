@@ -2,6 +2,8 @@ from typing import Optional, List
 from pydantic import BaseModel, field_validator, ConfigDict
 from datetime import datetime
 from uuid import UUID
+from .user import UserResponse
+from typing import Optional, List
 
 
 # Course Schemas
@@ -81,9 +83,11 @@ class CourseResponse(BaseModel):
     estimated_duration: Optional[int] = None
     is_published: bool
     price: float
+    enrollment_count: int = 0
     created_at: datetime
     updated_at: datetime
     instructor_id: UUID
+    modules: Optional[List['ModuleResponse']] = []
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -92,8 +96,9 @@ class CourseResponse(BaseModel):
 class ModuleBase(BaseModel):
     title: str
     description: Optional[str] = None
-    order: int
-    course_id: int
+    order_index: int
+    course_id: UUID
+    is_published: bool = False
     
     @field_validator("title")
     @classmethod
@@ -102,22 +107,40 @@ class ModuleBase(BaseModel):
             raise ValueError("Title must be at least 3 characters long")
         return v.strip()
     
-    @field_validator("order")
+    @field_validator("order_index")
     @classmethod
-    def validate_order(cls, v):
+    def validate_order_index(cls, v):
         if v < 0:
-            raise ValueError("Order must be a non-negative integer")
+            raise ValueError("Order index must be a non-negative integer")
         return v
 
 
-class ModuleCreate(ModuleBase):
-    pass
+class ModuleCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    order_index: int
+    is_published: bool = False
+    
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, v):
+        if len(v.strip()) < 3:
+            raise ValueError("Title must be at least 3 characters long")
+        return v.strip()
+    
+    @field_validator("order_index")
+    @classmethod
+    def validate_order_index(cls, v):
+        if v < 0:
+            raise ValueError("Order index must be a non-negative integer")
+        return v
 
 
 class ModuleUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
-    order: Optional[int] = None
+    order_index: Optional[int] = None
+    is_published: Optional[bool] = None
     
     @field_validator("title")
     @classmethod
@@ -126,24 +149,41 @@ class ModuleUpdate(BaseModel):
             raise ValueError("Title must be at least 3 characters long")
         return v.strip() if v else v
     
-    @field_validator("order")
+    @field_validator("order_index")
     @classmethod
-    def validate_order(cls, v):
+    def validate_order_index(cls, v):
         if v is not None and v < 0:
-            raise ValueError("Order must be a non-negative integer")
+            raise ValueError("Order index must be a non-negative integer")
         return v
 
 
+class LessonResponse(BaseModel):
+    id: UUID
+    title: str
+    description: Optional[str] = None
+    lesson_date: Optional[datetime] = None
+    instructor_name: Optional[str] = None
+    zoom_link: Optional[str] = None
+    quiz_link: Optional[str] = None
+    notification: Optional[str] = None
+    order_index: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    module_id: UUID
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ModuleResponse(ModuleBase):
-    id: int
+    id: UUID
     created_at: datetime
     updated_at: datetime
     
     # Related objects
-    lessons: Optional[List[dict]] = None  # Will be populated with lesson data
+    lessons: Optional[List[LessonResponse]] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Lesson Schemas
@@ -151,7 +191,7 @@ class LessonBase(BaseModel):
     title: str
     content: str
     order: int
-    module_id: int
+    module_id: str
     lesson_type: str = "text"  # text, video, quiz
     video_url: Optional[str] = None
     duration_minutes: Optional[int] = None
@@ -229,7 +269,7 @@ class LessonUpdate(BaseModel):
 
 
 class LessonResponse(LessonBase):
-    id: int
+    id: str
     created_at: datetime
     updated_at: datetime
     
@@ -246,7 +286,7 @@ class LessonAttachmentBase(BaseModel):
     file_url: str
     file_type: str
     file_size: int
-    lesson_id: int
+    lesson_id: str
     
     @field_validator("title")
     @classmethod
@@ -275,7 +315,7 @@ class LessonAttachmentUpdate(BaseModel):
 
 
 class LessonAttachmentResponse(LessonAttachmentBase):
-    id: int
+    id: str
     created_at: datetime
     updated_at: datetime
     
@@ -285,8 +325,8 @@ class LessonAttachmentResponse(LessonAttachmentBase):
 
 # User Enrollment Schemas
 class UserEnrollmentBase(BaseModel):
-    user_id: int
-    course_id: int
+    user_id: UUID
+    course_id: UUID
     is_completed: bool = False
     progress_percentage: float = 0.0
     
@@ -315,14 +355,14 @@ class UserEnrollmentUpdate(BaseModel):
 
 
 class UserEnrollmentResponse(UserEnrollmentBase):
-    id: int
+    id: UUID
     enrolled_at: datetime
     last_accessed_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     
     # Related objects
-    user: Optional[dict] = None  # Will be populated with user data
-    course: Optional[dict] = None  # Will be populated with course data
+    user: Optional[UserResponse] = None  # Will be populated with user data
+    course: Optional[CourseResponse] = None  # Will be populated with course data
     
     class Config:
         from_attributes = True

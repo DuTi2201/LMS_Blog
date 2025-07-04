@@ -1,4 +1,5 @@
 from typing import List, Optional
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -7,7 +8,7 @@ from ...core.database import get_db
 from ...schemas.learning import (
     CourseCreate, CourseUpdate, CourseResponse,
     UserEnrollmentCreate, UserEnrollmentResponse,
-    CourseSearchParams
+    CourseSearchParams, ModuleResponse, ModuleCreate
 )
 from ...services.learning_service import LearningService
 from ..deps import (
@@ -94,7 +95,7 @@ def get_enrolled_courses(
 
 @router.get("/{course_id}", response_model=CourseResponse)
 def get_course(
-    course_id: int,
+    course_id: UUID,
     current_user: Optional[User] = Depends(get_optional_current_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):
@@ -144,7 +145,7 @@ def create_course(
 
 @router.put("/{course_id}", response_model=CourseResponse)
 def update_course(
-    course_id: int,
+    course_id: UUID,
     course_update: CourseUpdate,
     current_user: User = Depends(get_active_user),
     learning_service: LearningService = Depends(get_learning_service)
@@ -178,7 +179,7 @@ def update_course(
 
 @router.delete("/{course_id}")
 def delete_course(
-    course_id: int,
+    course_id: UUID,
     current_user: User = Depends(get_active_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):
@@ -219,7 +220,7 @@ def delete_course(
 
 @router.post("/{course_id}/enroll", response_model=UserEnrollmentResponse)
 def enroll_in_course(
-    course_id: int,
+    course_id: UUID,
     current_user: User = Depends(get_active_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):
@@ -261,7 +262,7 @@ def enroll_in_course(
 
 @router.delete("/{course_id}/enroll")
 def unenroll_from_course(
-    course_id: int,
+    course_id: UUID,
     current_user: User = Depends(get_active_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):
@@ -286,7 +287,7 @@ def unenroll_from_course(
 
 @router.get("/{course_id}/enrollments", response_model=List[UserEnrollmentResponse])
 def get_course_enrollments(
-    course_id: int,
+    course_id: UUID,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     current_user: User = Depends(get_active_user),
@@ -320,7 +321,7 @@ def get_course_enrollments(
 
 @router.get("/{course_id}/progress")
 def get_course_progress(
-    course_id: int,
+    course_id: UUID,
     current_user: User = Depends(get_active_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):
@@ -339,7 +340,7 @@ def get_course_progress(
 
 @router.post("/{course_id}/publish")
 def publish_course(
-    course_id: int,
+    course_id: UUID,
     current_user: User = Depends(get_active_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):
@@ -375,7 +376,7 @@ def publish_course(
 
 @router.post("/{course_id}/unpublish")
 def unpublish_course(
-    course_id: int,
+    course_id: UUID,
     current_user: User = Depends(get_active_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):
@@ -411,7 +412,7 @@ def unpublish_course(
 
 @router.get("/{course_id}/stats")
 def get_course_stats(
-    course_id: int,
+    course_id: UUID,
     current_user: User = Depends(get_active_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):
@@ -448,3 +449,86 @@ def get_course_stats(
     }
     
     return stats
+
+
+@router.get("/{course_id}/modules", response_model=List[ModuleResponse])
+def get_course_modules(
+    course_id: UUID,
+    skip: int = Query(0, ge=0, description="Number of modules to skip"),
+    limit: int = Query(50, ge=1, le=200, description="Number of modules to return"),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    learning_service: LearningService = Depends(get_learning_service)
+):
+    """Get modules for a specific course"""
+    # Check if course exists
+    course = learning_service.get_course_by_id(course_id)
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+    
+    # Check if user can view unpublished courses
+    if not course.is_published:
+        if not current_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Course not found"
+            )
+        
+        # Only instructor, admin, or enrolled users can view unpublished course modules
+        if (current_user.id != course.instructor_id and 
+            current_user.role != UserRole.ADMIN):
+            # Check if user is enrolled
+            enrollment = learning_service.get_user_enrollment(current_user.id, course_id)
+            if not enrollment:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Course not found"
+                )
+    
+    # Get modules for the course
+    modules = learning_service.get_modules_by_course_id(
+        course_id=course_id,
+        skip=skip,
+        limit=limit
+    )
+    
+    return modules
+
+
+@router.post("/{course_id}/modules", response_model=ModuleResponse)
+def create_course_module(
+    course_id: UUID,
+    module_data: ModuleCreate,
+    current_user: User = Depends(get_active_user),
+    learning_service: LearningService = Depends(get_learning_service)
+):
+    """Create a new module for a course (Instructor/Admin only)"""
+    # Check if course exists
+    course = learning_service.get_course_by_id(course_id)
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+    
+    # Check permissions: only instructor or admin can create modules
+    if (current_user.id != course.instructor_id and 
+        current_user.role != UserRole.ADMIN):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions to create modules for this course"
+        )
+    
+    # Set course_id in module data
+    module_data.course_id = course_id
+    
+    try:
+        module = learning_service.create_module(module_data)
+        return module
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )

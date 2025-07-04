@@ -3,11 +3,13 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from ...core.database import get_db
-from ...schemas.user import UserResponse, UserUpdate
+from ...schemas.user import UserResponse, UserUpdate, UserCreate
+from ...schemas.learning import UserEnrollmentResponse
 from ...services.auth_service import AuthService
+from ...services.learning_service import LearningService
 from ..deps import (
     get_current_user, get_active_user, get_admin_user,
-    get_auth_service
+    get_auth_service, get_learning_service
 )
 from ...models.user import User, UserRole
 
@@ -33,6 +35,23 @@ def get_users(
         search=search
     )
     return users
+
+
+@router.post("/", response_model=UserResponse)
+def create_user(
+    user_create: UserCreate,
+    current_user: User = Depends(get_admin_user),
+    auth_service: AuthService = Depends(get_auth_service)
+):
+    """Create new user (Admin only)"""
+    try:
+        new_user = auth_service.create_user(user_create)
+        return new_user
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
 
 
 @router.get("/me", response_model=UserResponse)
@@ -81,7 +100,7 @@ def get_instructors(
 
 @router.get("/{user_id}", response_model=UserResponse)
 def get_user_by_id(
-    user_id: int,
+    user_id: str,
     current_user: User = Depends(get_current_user),
     auth_service: AuthService = Depends(get_auth_service)
 ):
@@ -105,7 +124,7 @@ def get_user_by_id(
 
 @router.put("/{user_id}", response_model=UserResponse)
 def update_user(
-    user_id: int,
+    user_id: str,
     user_update: UserUpdate,
     current_user: User = Depends(get_admin_user),
     auth_service: AuthService = Depends(get_auth_service)
@@ -128,7 +147,7 @@ def update_user(
 
 @router.delete("/{user_id}")
 def deactivate_user(
-    user_id: int,
+    user_id: str,
     current_user: User = Depends(get_admin_user),
     auth_service: AuthService = Depends(get_auth_service)
 ):
@@ -151,7 +170,7 @@ def deactivate_user(
 
 @router.post("/{user_id}/activate")
 def activate_user(
-    user_id: int,
+    user_id: str,
     current_user: User = Depends(get_admin_user),
     auth_service: AuthService = Depends(get_auth_service)
 ):
@@ -176,9 +195,33 @@ def activate_user(
     return {"message": "User activated successfully"}
 
 
+@router.get("/{user_id}/enrollments", response_model=List[UserEnrollmentResponse])
+def get_user_enrollments_for_user(
+    user_id: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    current_user: User = Depends(get_current_user),
+    learning_service: LearningService = Depends(get_learning_service)
+):
+    """Get user enrollments"""
+    # Users can view their own enrollments or admins can view any user's enrollments
+    if current_user.id != user_id and current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    enrollments = learning_service.get_user_enrollments(
+        user_id=user_id,
+        skip=skip,
+        limit=limit
+    )
+    return enrollments
+
+
 @router.post("/{user_id}/change-role")
 def change_user_role(
-    user_id: int,
+    user_id: str,
     new_role: UserRole,
     current_user: User = Depends(get_admin_user),
     auth_service: AuthService = Depends(get_auth_service)
@@ -204,7 +247,7 @@ def change_user_role(
 
 @router.get("/{user_id}/stats")
 def get_user_stats(
-    user_id: int,
+    user_id: str,
     current_user: User = Depends(get_current_user),
     auth_service: AuthService = Depends(get_auth_service)
 ):
@@ -235,3 +278,27 @@ def get_user_stats(
     }
     
     return stats
+
+
+@router.get("/{user_id}/enrollments", response_model=List[UserEnrollmentResponse])
+def get_user_enrollments(
+    user_id: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    current_user: User = Depends(get_current_user),
+    learning_service: LearningService = Depends(get_learning_service)
+):
+    """Get user enrollments"""
+    # Users can view their own enrollments or admins can view any user's enrollments
+    if current_user.id != user_id and current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    enrollments = learning_service.get_user_enrollments(
+        user_id=user_id,
+        skip=skip,
+        limit=limit
+    )
+    return enrollments

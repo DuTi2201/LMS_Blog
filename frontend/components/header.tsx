@@ -6,32 +6,23 @@ import { Input } from "@/components/ui/input"
 import { Search, Github, User, LogOut } from "lucide-react"
 import { useState, useEffect } from "react"
 import { LoginDialog } from "@/components/login-dialog"
-import { apiClient } from "@/lib/api"
-
-interface User {
-  id: number
-  email: string
-  full_name: string
-  role: string
-  is_active: boolean
-}
+import { apiClient, type User as UserType } from "@/lib/api"
 
 export function Header() {
   const [isLoginOpen, setIsLoginOpen] = useState(false)
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<UserType | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const token = localStorage.getItem('access_token')
-        if (token) {
-          const userData = await apiClient.getCurrentUser()
-          setUser(userData as User)
-        }
+        // Check authentication status without relying on a potentially stale state
+        const userData = await apiClient.getCurrentUser();
+        setUser(userData);
       } catch (error) {
         console.error('Auth check failed:', error)
-        localStorage.removeItem('access_token')
+        // API client will handle token cleanup automatically
+        setUser(null)
       } finally {
         setLoading(false)
       }
@@ -40,7 +31,7 @@ export function Header() {
     checkAuth()
   }, [])
 
-  const handleLogin = (userData: User) => {
+  const handleLogin = (userData: UserType) => {
     setUser(userData)
     setIsLoginOpen(false)
   }
@@ -83,21 +74,12 @@ export function Header() {
                 <Link href="/about" className="text-gray-700 hover:text-gray-900">
                   About
                 </Link>
-                <Link
-                  href="https://github.com"
-                  className="text-gray-700 hover:text-gray-900 flex items-center space-x-1"
-                >
-                  <span>GitHub</span>
-                  <Github className="w-4 h-4" />
-                </Link>
+              
               </nav>
             </div>
 
             <div className="flex items-center space-x-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input placeholder="Search" className="pl-10 w-64" />
-              </div>
+              
 
               {loading ? (
                 <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
@@ -109,6 +91,11 @@ export function Header() {
                   {(user.role === "admin" || user.role === "user") && (
                     <Link href="/blog-management">
                       <Button variant="outline">Manage Blog</Button>
+                    </Link>
+                  )}
+                  {user.role === "admin" && (
+                    <Link href="/user-management">
+                      <Button variant="outline">User Management</Button>
                     </Link>
                   )}
                   <div className="flex items-center space-x-2">

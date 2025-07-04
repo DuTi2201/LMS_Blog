@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPBearer
+from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi.security import HTTPBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from ...core.database import get_db
 from ...schemas.user import (
-    UserCreate, UserResponse, UserLogin, Token,
-    PasswordReset, PasswordResetConfirm
+    UserCreate, UserResponse, Token,
+    PasswordReset, PasswordResetConfirm, RefreshTokenRequest
 )
 from ...services.auth_service import AuthService
 from ..deps import get_current_user, get_auth_service
@@ -33,11 +33,11 @@ def register(
 
 @router.post("/login", response_model=Token)
 def login(
-    user_login: UserLogin,
+    form_data: OAuth2PasswordRequestForm = Depends(),
     auth_service: AuthService = Depends(get_auth_service)
 ):
     """Login user and return access token"""
-    user = auth_service.authenticate_user(user_login.username, user_login.password)
+    user = auth_service.authenticate_user(form_data.username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -57,15 +57,15 @@ def login(
 
 @router.post("/refresh", response_model=Token)
 def refresh_token(
-    refresh_token: str,
+    token_request: RefreshTokenRequest,
     auth_service: AuthService = Depends(get_auth_service)
 ):
     """Refresh access token using refresh token"""
     try:
-        new_access_token = auth_service.refresh_access_token(refresh_token)
+        new_access_token = auth_service.refresh_access_token(token_request.refresh_token)
         return {
             "access_token": new_access_token,
-            "refresh_token": refresh_token,
+            "refresh_token": token_request.refresh_token,
             "token_type": "bearer"
         }
     except ValueError as e:

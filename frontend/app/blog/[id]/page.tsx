@@ -1,6 +1,6 @@
 "use client"
 
-import React, { use } from "react"
+import React, { use, useState, useEffect } from "react"
 import { Header } from "@/components/header"
 import { Sidebar } from "@/components/sidebar"
 import { Badge } from "@/components/ui/badge"
@@ -8,70 +8,30 @@ import { Calendar, Clock, BookOpen } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
+import rehypeRaw from "rehype-raw"
 import "katex/dist/katex.css"
+import { apiClient, BlogPost } from "@/lib/api"
 
-const blogPosts = {
-  "1": {
-    id: "1",
-    title: "AIO2025 - Week 3: Object-Oriented Programming, SQL & Data Structures",
-    content: `# 🎯 Learning Objectives
+// Helper functions
+function formatDate(dateString: string): string {
+  const date = new Date(dateString)
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  })
+}
 
-Master object-oriented programming principles, advanced SQL operations, and fundamental data structures through interactive visualizations and practical examples.
+function calculateReadTime(content: string): string {
+  const wordsPerMinute = 200
+  const wordCount = content.split(/\s+/).filter(word => word.length > 0).length
+  const readTime = Math.ceil(wordCount / wordsPerMinute)
+  return `${readTime} min read`
+}
 
-## 📚 Table of Contents
-
-### 🎯 1. Object-Oriented Programming (OOP)
-
-#### 1.1. Classes and Objects Fundamentals
-
-| Concept | Definition | Key Characteristics |
-|---------|------------|-------------------|
-| Class | Blueprint for creating objects | Defines attributes and methods |
-| Object | Instance of a class | Contains actual data and can execute methods |
-| Attributes | Data stored in objects | Variables that hold object state |
-| Methods | Functions defined in classes | Operations that objects can perform |
-
-#### 🎨 Interactive Class-Object Relationship Visualization
-
-The relationship between classes and objects can be visualized as a blueprint creating multiple instances, each with their own data but sharing the same structure and behavior.
-
-### 📊 2. Database - SQL Advanced Techniques
-
-#### 2.1. SQL JOIN Clause
-#### 2.2. Subqueries (Nested Queries)
-#### 2.3. Common Table Expressions (CTEs)
-#### 2.4. Temporary Tables
-#### 2.5. Stored Procedures and Triggers
-
-### 📈 3. Data Structures Fundamentals
-
-#### 3.1. Stack
-#### 3.2. Queue
-#### 3.3. Tree
-#### 3.4. Binary Search Tree (BST)
-
-## 🎯 1. Object-Oriented Programming (OOP)
-
-💡 **Core Concept**: OOP is a programming paradigm based on "objects" - entities that encapsulate data (attributes) and behavior (methods) together.
-
-### 🖥️ 1.1. Classes and Objects Fundamentals
-
-Understanding the fundamental concepts of object-oriented programming is crucial for building scalable and maintainable applications.`,
-    date: "2025-06-23",
-    category: "Learning Notes",
-    tags: [
-      "AIO2025",
-      "Object-Oriented Programming",
-      "SQL",
-      "Data Structures",
-      "PyTorch",
-      "Python",
-      "Interactive Learning",
-    ],
-    author: "AI Blog Pro Team",
-    readTime: "99 minutes",
-    wordCount: "19831 words",
-  },
+function calculateWordCount(content: string): string {
+  const wordCount = content.split(/\s+/).filter(word => word.length > 0).length
+  return `${wordCount} words`
 }
 
 interface BlogPostPageProps {
@@ -80,10 +40,98 @@ interface BlogPostPageProps {
 
 export default function BlogPostPage({ params }: BlogPostPageProps) {
   const { id } = use(params)
-  const post = blogPosts[id as keyof typeof blogPosts]
+  const [post, setPost] = useState<BlogPost | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchPost = async () => {
+      try {
+        setLoading(true)
+        const blogPost = await apiClient.getBlogPost(id)
+        setPost(blogPost)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch blog post')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchPost()
+  }, [id])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex gap-8">
+            <aside className="w-80 flex-shrink-0">
+              <Sidebar />
+            </aside>
+            <main className="flex-1 max-w-4xl">
+              <div className="bg-white rounded-lg shadow-sm p-8">
+                <div className="animate-pulse">
+                  <div className="h-8 bg-gray-200 rounded mb-4"></div>
+                  <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded mb-8"></div>
+                  <div className="space-y-4">
+                    <div className="h-4 bg-gray-200 rounded"></div>
+                    <div className="h-4 bg-gray-200 rounded"></div>
+                    <div className="h-4 bg-gray-200 rounded"></div>
+                  </div>
+                </div>
+              </div>
+            </main>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex gap-8">
+            <aside className="w-80 flex-shrink-0">
+              <Sidebar />
+            </aside>
+            <main className="flex-1 max-w-4xl">
+              <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+                <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Post not found</h3>
+                <p className="text-gray-600">{error}</p>
+              </div>
+            </main>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (!post) {
-    return <div>Post not found</div>
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex gap-8">
+            <aside className="w-80 flex-shrink-0">
+              <Sidebar />
+            </aside>
+            <main className="flex-1 max-w-4xl">
+              <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+                <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Post not found</h3>
+                <p className="text-gray-600">The blog post you're looking for doesn't exist.</p>
+              </div>
+            </main>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -99,40 +147,49 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
               <header className="mb-8">
                 <div className="flex items-center space-x-4 text-sm text-gray-500 mb-4">
                   <div className="flex items-center space-x-1">
-                    <span>{post.wordCount}</span>
+                    <span>{calculateWordCount(post.content)}</span>
                   </div>
                   <div className="flex items-center space-x-1">
                     <Clock className="w-4 h-4" />
-                    <span>{post.readTime}</span>
+                    <span>{calculateReadTime(post.content)}</span>
                   </div>
                 </div>
 
-                <h1 className="text-3xl font-bold text-gray-900 mb-4">📚 {post.title}</h1>
+                <h1 className="text-3xl font-bold text-gray-900 mb-4">{post.title}</h1>
 
                 <div className="flex items-center space-x-4 text-sm text-gray-500 mb-4">
                   <div className="flex items-center space-x-1">
                     <Calendar className="w-4 h-4" />
-                    <span>{post.date}</span>
+                    <span>{formatDate(post.created_at)}</span>
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <BookOpen className="w-4 h-4" />
-                    <span>{post.category}</span>
-                  </div>
+                  {post.category && (
+                    <div className="flex items-center space-x-1">
+                      <BookOpen className="w-4 h-4" />
+                      <span>{post.category.name}</span>
+                    </div>
+                  )}
+                  {post.author && (
+                    <div className="flex items-center space-x-1">
+                      <span>by {post.author.full_name}</span>
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {post.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary" className="text-xs">
-                      #{tag}
-                    </Badge>
-                  ))}
-                </div>
+                {post.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    {post.tags.map((tag) => (
+                      <Badge key={tag.id} variant="secondary" className="text-xs">
+                        #{tag.name}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </header>
 
               <div className="prose prose-lg max-w-none">
                 <ReactMarkdown
                   remarkPlugins={[remarkMath]}
-                  rehypePlugins={[rehypeKatex]}
+                  rehypePlugins={[rehypeKatex, rehypeRaw]}
                   components={{
                     // Custom styling for different elements
                     h1: ({ children }) => (

@@ -8,6 +8,10 @@ export interface User {
   username: string;
   role: string;
   is_active: boolean;
+  is_verified: boolean;
+  avatar_url?: string;
+  bio?: string;
+  last_login_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -47,13 +51,14 @@ export interface BlogPostData {
 export interface Course {
   id: string;
   title: string;
-  description: string;
+  description?: string;
   short_description?: string;
   thumbnail_url?: string;
   difficulty_level: string;
-  estimated_duration: number;
+  estimated_duration?: number;
   is_published: boolean;
   price: number;
+  enrollment_count: number;
   created_at: string;
   updated_at: string;
   instructor_id: string;
@@ -64,12 +69,10 @@ export interface Course {
 export interface CourseData {
   title: string;
   description: string;
-  short_description?: string;
-  thumbnail_url?: string;
-  difficulty_level?: string;
-  estimated_duration?: number;
+  featured_image?: string;
   is_published?: boolean;
-  price?: number;
+  level?: string;
+  duration_hours?: number;
 }
 
 export interface Module {
@@ -140,13 +143,17 @@ class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    retryOnAuth: boolean = true
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       ...(options.headers as Record<string, string>),
     };
+
+    if (!headers['Content-Type'] && options.body) {
+        headers['Content-Type'] = 'application/json';
+    }
 
     if (this.token) {
       headers.Authorization = `Bearer ${this.token}`;
@@ -157,6 +164,29 @@ class ApiClient {
       headers,
     });
 
+    // Handle authentication errors
+    if ((response.status === 401 || response.status === 403) && retryOnAuth) {
+      // Token might be expired, try to refresh or clear it
+      if (typeof window !== 'undefined') {
+        const refreshToken = localStorage.getItem('refresh_token');
+        if (refreshToken) {
+          try {
+            await this.refreshAccessToken();
+            // Retry the request with new token
+            return this.request<T>(endpoint, options, false);
+          } catch (refreshError) {
+            // Refresh failed, clear tokens and redirect to login
+            this.clearTokens();
+            throw new Error('Session expired. Please login again.');
+          }
+        } else {
+          // No refresh token, clear access token
+          this.clearTokens();
+          throw new Error('Authentication required. Please login.');
+        }
+      }
+    }
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Network error' }));
       throw new Error(error.detail || `HTTP ${response.status}`);
@@ -165,22 +195,75 @@ class ApiClient {
     return response.json();
   }
 
+  private clearTokens() {
+    this.token = null;
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+    }
+  }
+
+  private async refreshAccessToken() {
+    if (typeof window === 'undefined') {
+      throw new Error('Cannot refresh token on server side');
+    }
+
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (!refreshToken) {
+      throw new Error('No refresh token available');
+    }
+
+    const response = await fetch(`${this.baseURL}/api/v1/auth/refresh`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to refresh token');
+    }
+
+    const data = await response.json();
+    this.token = data.access_token;
+    localStorage.setItem('access_token', data.access_token);
+    
+    if (data.refresh_token) {
+      localStorage.setItem('refresh_token', data.refresh_token);
+    }
+
+    return data;
+  }
+
   // Auth methods
-  async login(email: string, password: string) {
-    const response = await this.request<{ access_token: string; token_type: string; user: User }>(
+  async login(email: string, password: string): Promise<User> {
+    const formData = new URLSearchParams();
+    formData.append('username', email);
+    formData.append('password', password);
+
+    const tokenResponse = await this.request<{ access_token: string, refresh_token: string }>(
       '/api/v1/auth/login',
       {
         method: 'POST',
-        body: JSON.stringify({ username: email, password }),
-      }
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData.toString(),
+      },
+      false // Don't retry on auth error for login
     );
-    
-    this.token = response.access_token;
+
+    this.token = tokenResponse.access_token;
     if (typeof window !== 'undefined') {
-      localStorage.setItem('access_token', response.access_token);
+      localStorage.setItem('access_token', tokenResponse.access_token);
+      if (tokenResponse.refresh_token) {
+        localStorage.setItem('refresh_token', tokenResponse.refresh_token);
+      }
     }
-    
-    return response;
+
+    // After successful login, get user data
+    return this.getCurrentUser();
   }
 
   async register(email: string, password: string, full_name: string, username?: string) {
@@ -199,14 +282,19 @@ class ApiClient {
   }
 
   async logout() {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('access_token');
-    }
-    this.token = null;
+    this.clearTokens();
   }
 
-  async getCurrentUser() {
-    return this.request('/api/v1/auth/me');
+  async getCurrentUser(): Promise<User> {
+    return this.request<User>('/api/v1/auth/me');
+  }
+
+  isAuthenticated(): boolean {
+    return !!this.token;
+  }
+
+  getToken(): string | null {
+    return this.token;
   }
 
   // Blog methods
@@ -215,7 +303,7 @@ class ApiClient {
   }
 
   async getBlogPost(id: string): Promise<BlogPost> {
-    return this.request<BlogPost>(`/api/v1/blogs/${id}/`);
+    return this.request<BlogPost>(`/api/v1/blogs/${id}`);
   }
 
   async createBlogPost(data: BlogPostData): Promise<BlogPost> {
@@ -226,14 +314,14 @@ class ApiClient {
   }
 
   async updateBlogPost(id: string, data: BlogPostData): Promise<BlogPost> {
-    return this.request<BlogPost>(`/api/v1/blogs/${id}/`, {
+    return this.request<BlogPost>(`/api/v1/blogs/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   }
 
   async deleteBlogPost(id: string): Promise<void> {
-    return this.request<void>(`/api/v1/blogs/${id}/`, {
+    return this.request<void>(`/api/v1/blogs/${id}`, {
       method: 'DELETE',
     });
   }
@@ -258,6 +346,10 @@ class ApiClient {
     return this.request<Course[]>(`/api/v1/courses/?skip=${skip}&limit=${limit}`);
   }
 
+  async getEnrolledCourses(skip: number = 0, limit: number = 10): Promise<Course[]> {
+    return this.request<Course[]>(`/api/v1/courses/enrolled?skip=${skip}&limit=${limit}`);
+  }
+
   async getCourse(id: string): Promise<Course> {
     return this.request<Course>(`/api/v1/courses/${id}/`);
   }
@@ -266,6 +358,19 @@ class ApiClient {
     return this.request<Course>('/api/v1/courses/', {
       method: 'POST',
       body: JSON.stringify(courseData),
+    });
+  }
+
+  async updateCourse(id: string, courseData: CourseData): Promise<Course> {
+    return this.request<Course>(`/api/v1/courses/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(courseData),
+    });
+  }
+
+  async deleteCourse(id: string): Promise<void> {
+    return this.request<void>(`/api/v1/courses/${id}`, {
+      method: 'DELETE',
     });
   }
 
@@ -281,13 +386,80 @@ class ApiClient {
   }
 
   async getLessons(moduleId: string): Promise<Lesson[]> {
-    return this.request<Lesson[]>(`/api/v1/modules/${moduleId}/lessons/`);
+    const response = await this.request<{items: Lesson[], total: number}>(`/api/v1/modules/${moduleId}/lessons/`);
+    return response.items;
   }
 
   async createLesson(moduleId: string, lessonData: LessonData): Promise<Lesson> {
     return this.request<Lesson>(`/api/v1/modules/${moduleId}/lessons/`, {
       method: 'POST',
       body: JSON.stringify(lessonData),
+    });
+  }
+
+  // User management methods
+  async getUsers(skip: number = 0, limit: number = 100): Promise<User[]> {
+    return this.request<User[]>(`/api/v1/users/?skip=${skip}&limit=${limit}`);
+  }
+
+  async getUser(id: string): Promise<User> {
+    return this.request<User>(`/api/v1/users/${id}`);
+  }
+
+  async createUser(userData: {
+    username: string;
+    email: string;
+    full_name: string;
+    password: string;
+    role?: string;
+  }): Promise<User> {
+    return this.request<User>('/api/v1/users/', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+  }
+
+  async updateUser(id: string, userData: {
+    username?: string;
+    email?: string;
+    full_name?: string;
+    password?: string;
+    role?: string;
+  }): Promise<User> {
+    return this.request<User>(`/api/v1/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(userData),
+    });
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    return this.request<void>(`/api/v1/users/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async changeUserRole(id: string, role: string): Promise<User> {
+    return this.request<User>(`/api/v1/users/${id}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role }),
+    });
+  }
+
+  // Enrollment methods
+  async getUserEnrollments(userId: string): Promise<any[]> {
+    return this.request<any[]>(`/api/v1/users/${userId}/enrollments`);
+  }
+
+  async enrollUserInCourse(userId: string, courseId: string): Promise<any> {
+    return this.request<any>('/api/v1/enrollments/', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId, course_id: courseId }),
+    });
+  }
+
+  async unenrollUserFromCourse(userId: string, courseId: string): Promise<void> {
+    return this.request<void>(`/api/v1/enrollments/${userId}/${courseId}`, {
+      method: 'DELETE',
     });
   }
 

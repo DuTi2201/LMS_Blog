@@ -9,6 +9,7 @@ from .v1.modules import router as modules_router
 from .v1.lessons import router as lessons_router
 from .v1.files import router as files_router
 from .v1.users import router as users_router
+from .v1.enrollments import router as enrollments_router
 
 api_router = APIRouter()
 
@@ -30,3 +31,6 @@ api_router.include_router(lessons_router, prefix="/lessons", tags=["lessons"])
 
 # File management routes
 api_router.include_router(files_router, prefix="/files", tags=["files"])
+
+# Enrollment management routes
+api_router.include_router(enrollments_router, prefix="/enrollments", tags=["enrollments"])

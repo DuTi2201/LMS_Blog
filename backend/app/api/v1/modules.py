@@ -1,4 +1,5 @@
 from typing import List, Optional
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
@@ -18,7 +19,7 @@ router = APIRouter()
 
 @router.get("/", response_model=List[ModuleResponse])
 def get_modules(
-    course_id: Optional[int] = Query(None, description="Filter by course ID"),
+    course_id: Optional[UUID] = Query(None, description="Filter by course ID"),
     skip: int = Query(0, ge=0, description="Number of modules to skip"),
     limit: int = Query(50, ge=1, le=200, description="Number of modules to return"),
     current_user: Optional[User] = Depends(get_optional_current_user),
@@ -76,7 +77,7 @@ def get_modules(
 
 @router.get("/{module_id}", response_model=ModuleResponse)
 def get_module(
-    module_id: int,
+    module_id: UUID,
     current_user: Optional[User] = Depends(get_optional_current_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):
@@ -146,7 +147,7 @@ def create_module(
 
 @router.put("/{module_id}", response_model=ModuleResponse)
 def update_module(
-    module_id: int,
+    module_id: UUID,
     module_update: ModuleUpdate,
     current_user: User = Depends(get_active_user),
     learning_service: LearningService = Depends(get_learning_service)
@@ -181,7 +182,7 @@ def update_module(
 
 @router.delete("/{module_id}")
 def delete_module(
-    module_id: int,
+    module_id: UUID,
     current_user: User = Depends(get_active_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):
@@ -222,7 +223,7 @@ def delete_module(
 
 @router.get("/{module_id}/lessons")
 def get_module_lessons(
-    module_id: int,
+    module_id: UUID,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     current_user: Optional[User] = Depends(get_optional_current_user),
@@ -271,7 +272,7 @@ def get_module_lessons(
 
 @router.post("/{module_id}/reorder")
 def reorder_module(
-    module_id: int,
+    module_id: UUID,
     new_order: int,
     current_user: User = Depends(get_active_user),
     learning_service: LearningService = Depends(get_learning_service)
@@ -312,7 +313,7 @@ def reorder_module(
 
 @router.get("/{module_id}/progress")
 def get_module_progress(
-    module_id: int,
+    module_id: UUID,
     current_user: User = Depends(get_active_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):
@@ -339,7 +340,7 @@ def get_module_progress(
 
 @router.get("/{module_id}/stats")
 def get_module_stats(
-    module_id: int,
+    module_id: UUID,
     current_user: User = Depends(get_active_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):

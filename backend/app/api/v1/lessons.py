@@ -1,4 +1,5 @@
 from typing import List, Optional
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.orm import Session
 
@@ -20,7 +21,7 @@ router = APIRouter()
 
 @router.get("/", response_model=List[LessonResponse])
 def get_lessons(
-    module_id: Optional[int] = Query(None, description="Filter by module ID"),
+    module_id: Optional[UUID] = Query(None, description="Filter by module ID"),
     skip: int = Query(0, ge=0, description="Number of lessons to skip"),
     limit: int = Query(50, ge=1, le=200, description="Number of lessons to return"),
     current_user: Optional[User] = Depends(get_optional_current_user),
@@ -79,7 +80,7 @@ def get_lessons(
 
 @router.get("/{lesson_id}", response_model=LessonResponse)
 def get_lesson(
-    lesson_id: int,
+    lesson_id: UUID,
     current_user: Optional[User] = Depends(get_optional_current_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):
@@ -151,7 +152,7 @@ def create_lesson(
 
 @router.put("/{lesson_id}", response_model=LessonResponse)
 def update_lesson(
-    lesson_id: int,
+    lesson_id: UUID,
     lesson_update: LessonUpdate,
     current_user: User = Depends(get_active_user),
     learning_service: LearningService = Depends(get_learning_service)
@@ -187,7 +188,7 @@ def update_lesson(
 
 @router.delete("/{lesson_id}")
 def delete_lesson(
-    lesson_id: int,
+    lesson_id: UUID,
     current_user: User = Depends(get_active_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):
@@ -222,7 +223,7 @@ def delete_lesson(
 
 @router.post("/{lesson_id}/reorder")
 def reorder_lesson(
-    lesson_id: int,
+    lesson_id: UUID,
     new_order: int,
     current_user: User = Depends(get_active_user),
     learning_service: LearningService = Depends(get_learning_service)
@@ -264,7 +265,7 @@ def reorder_lesson(
 
 @router.post("/{lesson_id}/complete")
 def complete_lesson(
-    lesson_id: int,
+    lesson_id: UUID,
     current_user: User = Depends(get_active_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):
@@ -304,7 +305,7 @@ def complete_lesson(
 
 @router.delete("/{lesson_id}/complete")
 def uncomplete_lesson(
-    lesson_id: int,
+    lesson_id: UUID,
     current_user: User = Depends(get_active_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):
@@ -345,7 +346,7 @@ def uncomplete_lesson(
 # Lesson Attachments
 @router.get("/{lesson_id}/attachments", response_model=List[LessonAttachmentResponse])
 def get_lesson_attachments(
-    lesson_id: int,
+    lesson_id: UUID,
     current_user: Optional[User] = Depends(get_optional_current_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):
@@ -384,7 +385,7 @@ def get_lesson_attachments(
 
 @router.post("/{lesson_id}/attachments", response_model=LessonAttachmentResponse, status_code=status.HTTP_201_CREATED)
 def create_lesson_attachment(
-    lesson_id: int,
+    lesson_id: UUID,
     attachment_create: LessonAttachmentCreate,
     current_user: User = Depends(get_instructor_user),
     learning_service: LearningService = Depends(get_learning_service)
@@ -420,7 +421,7 @@ def create_lesson_attachment(
 
 @router.post("/{lesson_id}/attachments/upload")
 async def upload_lesson_attachment(
-    lesson_id: int,
+    lesson_id: UUID,
     file: UploadFile = File(...),
     title: Optional[str] = None,
     description: Optional[str] = None,
@@ -476,7 +477,7 @@ async def upload_lesson_attachment(
 
 @router.delete("/attachments/{attachment_id}")
 async def delete_lesson_attachment(
-    attachment_id: int,
+    attachment_id: UUID,
     current_user: User = Depends(get_active_user),
     learning_service: LearningService = Depends(get_learning_service),
     file_service: FileService = Depends(get_file_service)
@@ -524,7 +525,7 @@ async def delete_lesson_attachment(
 
 @router.get("/{lesson_id}/progress")
 def get_lesson_progress(
-    lesson_id: int,
+    lesson_id: UUID,
     current_user: User = Depends(get_active_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):

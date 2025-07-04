@@ -7,7 +7,7 @@ from typing import Optional
 
 from ..core.database import get_db
 from ..core.config import settings
-from ..models.user import User
+from ..models.user import User, UserRole
 from ..services.auth_service import AuthService
 
 # Security scheme
@@ -33,7 +33,7 @@ def get_current_user(
             settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM]
         )
-        user_id: int = payload.get("sub")
+        user_id: str = payload.get("sub")
         if user_id is None:
             raise credentials_exception
     except JWTError:
@@ -73,7 +73,7 @@ def get_current_admin_user(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """Get current user and verify admin role"""
-    if current_user.role != "admin":
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions. Admin role required."
@@ -85,7 +85,7 @@ def get_admin_user(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """Get admin user (alias for get_current_admin_user)"""
-    if current_user.role != "admin":
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions. Admin role required."
@@ -97,7 +97,7 @@ def get_current_instructor_user(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """Get current user and verify instructor or admin role"""
-    if current_user.role not in ["instructor", "admin"]:
+    if current_user.role not in [UserRole.INSTRUCTOR, UserRole.ADMIN]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions. Instructor or Admin role required."
@@ -109,7 +109,7 @@ def get_instructor_user(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """Get instructor user (alias for get_current_instructor_user)"""
-    if current_user.role not in ["instructor", "admin"]:
+    if current_user.role not in [UserRole.INSTRUCTOR, UserRole.ADMIN]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions. Instructor or Admin role required."
@@ -132,7 +132,7 @@ def get_optional_current_user(
             settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM]
         )
-        user_id: int = payload.get("sub")
+        user_id: str = payload.get("sub")
         if user_id is None:
             return None
     except JWTError:

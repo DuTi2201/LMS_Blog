@@ -1,93 +1,42 @@
-#!/usr/bin/env python3
-"""
-Script to test login with created accounts
-"""
-
-import requests
 import json
+import urllib.request
+import urllib.parse
 
-def test_login(email, password, role):
-    """Test login for a specific account"""
-    url = "http://localhost:8001/api/v1/auth/login"
-    data = {
-        "username": email,
-        "password": password
-    }
+# Test login with admin@lms.com
+data = json.dumps({
+    'username': 'admin@lms.com', 
+    'password': 'admin123'
+}).encode('utf-8')
+
+req = urllib.request.Request(
+    'http://localhost:8001/api/v1/auth/login', 
+    data=data, 
+    headers={'Content-Type': 'application/json'}
+)
+
+try:
+    response = urllib.request.urlopen(req)
+    result = json.loads(response.read().decode('utf-8'))
+    print('Status:', response.status)
+    print('Response:', json.dumps(result, indent=2))
     
-    try:
-        response = requests.post(url, json=data)
-        print(f"\n🔐 Testing {role} login:")
-        print(f"   Email: {email}")
-        print(f"   Status: {response.status_code}")
+    # Test users API if login successful
+    if response.status == 200 and 'access_token' in result:
+        token = result['access_token']
+        print('\nTesting users API with token...')
         
-        if response.status_code == 200:
-            result = response.json()
-            print(f"   ✅ Login successful!")
-            print(f"   Token type: {result.get('token_type')}")
-            print(f"   Access token: {result.get('access_token')[:50]}...")
-            return result.get('access_token')
-        else:
-            print(f"   ❌ Login failed: {response.text}")
-            return None
-            
-    except requests.exceptions.ConnectionError:
-        print(f"   ❌ Cannot connect to server at {url}")
-        return None
-    except Exception as e:
-        print(f"   ❌ Error: {e}")
-        return None
-
-def test_protected_endpoint(token, role):
-    """Test accessing protected endpoint with token"""
-    url = "http://localhost:8001/api/v1/auth/me"
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
-    
-    try:
-        response = requests.get(url, headers=headers)
-        print(f"\n👤 Testing {role} profile access:")
-        print(f"   Status: {response.status_code}")
+        users_req = urllib.request.Request(
+            'http://localhost:8001/api/v1/users/',
+            headers={'Authorization': f'Bearer {token}'}
+        )
         
-        if response.status_code == 200:
-            result = response.json()
-            print(f"   ✅ Profile access successful!")
-            print(f"   User ID: {result.get('id')}")
-            print(f"   Email: {result.get('email')}")
-            print(f"   Role: {result.get('role')}")
-            print(f"   Full name: {result.get('full_name')}")
-        else:
-            print(f"   ❌ Profile access failed: {response.text}")
-            
-    except Exception as e:
-        print(f"   ❌ Error: {e}")
-
-if __name__ == "__main__":
-    print("Testing LMS Authentication System")
-    print("=" * 50)
-    print("DEBUG: Script started")
-    
-    # Test accounts
-    accounts = [
-        ("admin@lms.com", "admin123", "Admin"),
-        ("user@lms.com", "user123", "User"),
-        ("instructor@lms.com", "instructor123", "Instructor")
-    ]
-    
-    tokens = {}
-    
-    # Test login for each account
-    for email, password, role in accounts:
-        token = test_login(email, password, role)
-        if token:
-            tokens[role] = token
-    
-    print("\n" + "=" * 50)
-    print("Testing Protected Endpoints")
-    print("=" * 50)
-    
-    # Test protected endpoints
-    for role, token in tokens.items():
-        test_protected_endpoint(token, role)
-    
-    print("\n✅ Authentication testing completed!")
+        users_response = urllib.request.urlopen(users_req)
+        users_result = json.loads(users_response.read().decode('utf-8'))
+        print('Users API Status:', users_response.status)
+        print('Users API Response:', json.dumps(users_result, indent=2))
+        
+except urllib.error.HTTPError as e:
+    print('HTTP Error:', e.code)
+    print('Error response:', e.read().decode('utf-8'))
+except Exception as e:
+    print('Error:', str(e))

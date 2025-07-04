@@ -40,6 +40,18 @@ class LearningService:
         
         self.db.add(db_course)
         self.db.commit()
+    
+    def get_lessons_by_module(self, module_id: str, skip: int = 0, limit: int = 50) -> List[Lesson]:
+        """Get lessons by module ID"""
+        return self.db.query(Lesson).filter(
+            Lesson.module_id == module_id
+        ).order_by(Lesson.order_index).offset(skip).limit(limit).all()
+    
+    def get_lessons(self, skip: int = 0, limit: int = 50) -> List[Lesson]:
+        """Get all lessons"""
+        return self.db.query(Lesson).order_by(
+            Lesson.created_at.desc()
+        ).offset(skip).limit(limit).all()
         self.db.refresh(db_course)
         
         return db_course
@@ -98,14 +110,14 @@ class LearningService:
             print(f"Error in get_courses: {e}")
             return [], 0
     
-    def get_course_by_id(self, course_id: int) -> Optional[Course]:
+    def get_course_by_id(self, course_id: str) -> Optional[Course]:
         """Get course by ID with full details"""
         return self.db.query(Course).options(
             joinedload(Course.instructor),
             joinedload(Course.modules).joinedload(Module.lessons).joinedload(Lesson.attachments)
         ).filter(Course.id == course_id).first()
     
-    def update_course(self, course_id: int, course_update: CourseUpdate, user_id: int) -> Course:
+    def update_course(self, course_id: str, course_update: CourseUpdate, user_id: str) -> Course:
         """Update course"""
         course = self.get_course_by_id(course_id)
         if not course:
@@ -134,7 +146,7 @@ class LearningService:
         
         return course
     
-    def delete_course(self, course_id: int, user_id: int) -> bool:
+    def delete_course(self, course_id: str, user_id: str) -> bool:
         """Delete course"""
         course = self.get_course_by_id(course_id)
         if not course:
@@ -167,6 +179,15 @@ class LearningService:
         
         return True
     
+    def enroll_user_in_course(self, user_id: str, course_id: str) -> UserEnrollment:
+        """Enroll user in course (for admin use)"""
+        enrollment_create = UserEnrollmentCreate(user_id=user_id, course_id=course_id)
+        return self.enroll_user(enrollment_create, user_id)
+    
+    def unenroll_user_from_course(self, user_id: str, course_id: str) -> bool:
+        """Unenroll user from course (for admin use)"""
+        return self.unenroll_user(course_id, user_id)
+    
     def get_popular_courses(self, limit: int = 10) -> List[Course]:
         """Get most popular courses by enrollment count"""
         return self.db.query(Course).options(
@@ -188,7 +209,7 @@ class LearningService:
         ).limit(limit).all()
     
     # Module Methods
-    def create_module(self, module_create: ModuleCreate, course_id: int, user_id: int) -> Module:
+    def create_module(self, module_create: ModuleCreate, course_id: str, user_id: str) -> Module:
         """Create a new module"""
         # Check if course exists and user has permission
         course = self.get_course_by_id(course_id)
@@ -223,6 +244,16 @@ class LearningService:
         
         return db_module
     
+    def get_modules_by_course_id(self, course_id: str, skip: int = 0, limit: int = 50) -> List[Module]:
+        """Get modules for a specific course"""
+        return self.db.query(Module).options(
+            joinedload(Module.lessons).joinedload(Lesson.attachments)
+        ).filter(
+            Module.course_id == course_id
+        ).order_by(
+            Module.order_index
+        ).offset(skip).limit(limit).all()
+    
     def get_module_by_id(self, module_id: int) -> Optional[Module]:
         """Get module by ID with lessons"""
         return self.db.query(Module).options(
@@ -230,7 +261,7 @@ class LearningService:
             joinedload(Module.lessons).joinedload(Lesson.attachments)
         ).filter(Module.id == module_id).first()
     
-    def update_module(self, module_id: int, module_update: ModuleUpdate, user_id: int) -> Module:
+    def update_module(self, module_id: int, module_update: ModuleUpdate, user_id: str) -> Module:
         """Update module"""
         module = self.get_module_by_id(module_id)
         if not module:
@@ -259,7 +290,7 @@ class LearningService:
         
         return module
     
-    def delete_module(self, module_id: int, user_id: int) -> bool:
+    def delete_module(self, module_id: int, user_id: str) -> bool:
         """Delete module"""
         module = self.get_module_by_id(module_id)
         if not module:
@@ -281,7 +312,7 @@ class LearningService:
         
         return True
     
-    def reorder_modules(self, course_id: int, module_orders: List[dict], user_id: int) -> List[Module]:
+    def reorder_modules(self, course_id: str, module_orders: List[dict], user_id: str) -> List[Module]:
         """Reorder modules in a course"""
         # Check if course exists and user has permission
         course = self.get_course_by_id(course_id)
@@ -322,7 +353,7 @@ class LearningService:
         ).order_by(Module.order_index).all()
     
     # Lesson Methods
-    def create_lesson(self, lesson_create: LessonCreate, module_id: int, user_id: int) -> Lesson:
+    def create_lesson(self, lesson_create: LessonCreate, module_id: int, user_id: str) -> Lesson:
         """Create a new lesson"""
         # Check if module exists and user has permission
         module = self.get_module_by_id(module_id)
@@ -368,7 +399,7 @@ class LearningService:
             joinedload(Lesson.attachments)
         ).filter(Lesson.id == lesson_id).first()
     
-    def update_lesson(self, lesson_id: int, lesson_update: LessonUpdate, user_id: int) -> Lesson:
+    def update_lesson(self, lesson_id: int, lesson_update: LessonUpdate, user_id: str) -> Lesson:
         """Update lesson"""
         lesson = self.get_lesson_by_id(lesson_id)
         if not lesson:
@@ -397,7 +428,7 @@ class LearningService:
         
         return lesson
     
-    def delete_lesson(self, lesson_id: int, user_id: int) -> bool:
+    def delete_lesson(self, lesson_id: int, user_id: str) -> bool:
         """Delete lesson"""
         lesson = self.get_lesson_by_id(lesson_id)
         if not lesson:
@@ -420,7 +451,7 @@ class LearningService:
         return True
     
     # Lesson Attachment Methods
-    def create_lesson_attachment(self, attachment_create: LessonAttachmentCreate, lesson_id: int, user_id: int) -> LessonAttachment:
+    def create_lesson_attachment(self, attachment_create: LessonAttachmentCreate, lesson_id: int, user_id: str) -> LessonAttachment:
         """Create a new lesson attachment"""
         # Check if lesson exists and user has permission
         lesson = self.get_lesson_by_id(lesson_id)
@@ -451,7 +482,7 @@ class LearningService:
         
         return db_attachment
     
-    def delete_lesson_attachment(self, attachment_id: int, user_id: int) -> bool:
+    def delete_lesson_attachment(self, attachment_id: int, user_id: str) -> bool:
         """Delete lesson attachment"""
         attachment = self.db.query(LessonAttachment).options(
             joinedload(LessonAttachment.lesson).joinedload(Lesson.module).joinedload(Module.course)
@@ -477,7 +508,7 @@ class LearningService:
         return True
     
     # Enrollment Methods
-    def enroll_user(self, enrollment_create: UserEnrollmentCreate, user_id: int) -> UserEnrollment:
+    def enroll_user(self, enrollment_create: UserEnrollmentCreate, user_id: str) -> UserEnrollment:
         """Enroll user in a course"""
         # Check if course exists
         course = self.get_course_by_id(enrollment_create.course_id)
@@ -524,7 +555,7 @@ class LearningService:
         
         return db_enrollment
     
-    def get_user_enrollments(self, user_id: int, skip: int = 0, limit: int = 10) -> List[UserEnrollment]:
+    def get_user_enrollments(self, user_id: str, skip: int = 0, limit: int = 10) -> List[UserEnrollment]:
         """Get user's course enrollments"""
         return self.db.query(UserEnrollment).options(
             joinedload(UserEnrollment.course).joinedload(Course.instructor)
@@ -534,7 +565,7 @@ class LearningService:
             desc(UserEnrollment.enrolled_at)
         ).offset(skip).limit(limit).all()
     
-    def get_course_enrollments(self, course_id: int, skip: int = 0, limit: int = 10) -> List[UserEnrollment]:
+    def get_course_enrollments(self, course_id: str, skip: int = 0, limit: int = 10) -> List[UserEnrollment]:
         """Get course enrollments"""
         return self.db.query(UserEnrollment).options(
             joinedload(UserEnrollment.user)
@@ -544,7 +575,7 @@ class LearningService:
             desc(UserEnrollment.enrolled_at)
         ).offset(skip).limit(limit).all()
     
-    def unenroll_user(self, course_id: int, user_id: int) -> bool:
+    def unenroll_user(self, course_id: str, user_id: str) -> bool:
         """Unenroll user from course"""
         enrollment = self.db.query(UserEnrollment).filter(
             and_(
@@ -570,7 +601,7 @@ class LearningService:
         return True
     
     # Progress Tracking Methods
-    def mark_lesson_complete(self, lesson_id: int, user_id: int) -> UserProgress:
+    def mark_lesson_complete(self, lesson_id: int, user_id: str) -> UserProgress:
         """Mark lesson as completed for user"""
         # Check if lesson exists
         lesson = self.get_lesson_by_id(lesson_id)
@@ -623,7 +654,7 @@ class LearningService:
         
         return progress
     
-    def get_user_course_progress(self, user_id: int, course_id: int) -> Optional[UserProgress]:
+    def get_user_course_progress(self, user_id: str, course_id: str) -> Optional[UserProgress]:
         """Get user's progress for a specific course"""
         return self.db.query(UserProgress).filter(
             and_(
@@ -632,7 +663,7 @@ class LearningService:
             )
         ).first()
     
-    def _update_course_progress(self, user_id: int, course_id: int):
+    def _update_course_progress(self, user_id: str, course_id: str):
         """Update user's overall progress for a course"""
         # Get total lessons in course
         total_lessons = self.db.query(func.count(Lesson.id)).join(

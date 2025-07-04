@@ -70,11 +70,11 @@ class BlogService:
         
         return query.offset(skip).limit(limit).all()
     
-    def get_category_by_id(self, category_id: int) -> Optional[BlogCategory]:
+    def get_category_by_id(self, category_id: UUID) -> Optional[BlogCategory]:
         """Get category by ID"""
         return self.db.query(BlogCategory).filter(BlogCategory.id == category_id).first()
     
-    def update_category(self, category_id: int, category_update: BlogCategoryUpdate) -> BlogCategory:
+    def update_category(self, category_id: UUID, category_update: BlogCategoryUpdate) -> BlogCategory:
         """Update blog category"""
         category = self.get_category_by_id(category_id)
         if not category:
@@ -105,7 +105,7 @@ class BlogService:
         
         return category
     
-    def delete_category(self, category_id: int) -> bool:
+    def delete_category(self, category_id: UUID) -> bool:
         """Delete blog category"""
         category = self.get_category_by_id(category_id)
         if not category:
@@ -160,7 +160,7 @@ class BlogService:
         
         return query.offset(skip).limit(limit).all()
     
-    def get_tag_by_id(self, tag_id: int) -> Optional[BlogTag]:
+    def get_tag_by_id(self, tag_id: UUID) -> Optional[BlogTag]:
         """Get tag by ID"""
         return self.db.query(BlogTag).filter(BlogTag.id == tag_id).first()
     
@@ -168,7 +168,7 @@ class BlogService:
         """Get tag by name"""
         return self.db.query(BlogTag).filter(BlogTag.name == name).first()
     
-    def update_tag(self, tag_id: int, tag_update: BlogTagUpdate) -> BlogTag:
+    def update_tag(self, tag_id: UUID, tag_update: BlogTagUpdate) -> BlogTag:
         """Update blog tag"""
         tag = self.get_tag_by_id(tag_id)
         if not tag:
@@ -199,7 +199,7 @@ class BlogService:
         
         return tag
     
-    def delete_tag(self, tag_id: int) -> bool:
+    def delete_tag(self, tag_id: UUID) -> bool:
         """Delete blog tag"""
         tag = self.get_tag_by_id(tag_id)
         if not tag:
@@ -214,7 +214,7 @@ class BlogService:
         return True
     
     # Blog Post Methods
-    def create_post(self, post_create: BlogPostCreate, author_id: int) -> BlogPost:
+    def create_blog_post(self, post_create: BlogPostCreate, author_id: UUID) -> BlogPost:
         """Create a new blog post"""
         # Generate slug from title
         slug = self._generate_slug(post_create.title)
@@ -224,9 +224,9 @@ class BlogService:
             title=post_create.title,
             content=post_create.content,
             excerpt=post_create.excerpt,
-            featured_image=post_create.featured_image,
+            featured_image_url=post_create.featured_image,
             slug=slug,
-            is_published=post_create.is_published,
+            status="published" if post_create.is_published else "draft",
             category_id=post_create.category_id,
             author_id=author_id,
             published_at=datetime.utcnow() if post_create.is_published else None
@@ -263,7 +263,7 @@ class BlogService:
         query = query.filter(
             or_(
                 BlogPost.author_id == user_id,  # User's own posts (all)
-                BlogPost.is_published == True   # Published posts from others
+                BlogPost.status == "published"   # Published posts from others
             )
         )
         
@@ -289,13 +289,13 @@ class BlogService:
         # Apply additional published filter if specified
         if search_params.is_published is not None:
             if search_params.is_published:
-                query = query.filter(BlogPost.is_published == True)
+                query = query.filter(BlogPost.status == "published")
             else:
                 # For unpublished filter, only show user's own unpublished posts
                 query = query.filter(
                     and_(
                         BlogPost.author_id == user_id,
-                        BlogPost.is_published == False
+                        BlogPost.status == "draft"
                     )
                 )
         
@@ -399,8 +399,9 @@ class BlogService:
             )
         
         # Check if user is the author or admin
-        if post.author_id != user_id:
-            # TODO: Add admin role check
+        # Check permissions: author, admin, or instructor
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user or (post.author_id != user_id and user.role not in ["admin", "instructor"]):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to update this post"
@@ -420,8 +421,8 @@ class BlogService:
                 update_data["published_at"] = None
         
         # Handle tags
-        if "tag_ids" in update_data:
-            tag_ids = update_data.pop("tag_ids")
+        if "tag_ids" in update_data and update_data["tag_ids"] is not None:
+            tag_ids = update_data.pop("tag_ids", [])
             # Clear existing tags
             post.tags.clear()
             # Add new tags
@@ -430,6 +431,17 @@ class BlogService:
                     tag = self.get_tag_by_id(tag_id)
                     if tag:
                         post.tags.append(tag)
+        
+        # Handle is_published separately by updating status
+        if 'is_published' in update_data:
+            is_published = update_data.pop('is_published')
+            if is_published:
+                post.status = "published"
+                if not post.published_at:
+                    post.published_at = datetime.utcnow()
+            else:
+                post.status = "draft"
+                post.published_at = None
         
         # Update other fields
         for field, value in update_data.items():
@@ -486,7 +498,7 @@ class BlogService:
             joinedload(BlogPost.category),
             joinedload(BlogPost.tags)
         ).filter(
-            BlogPost.is_published == True
+            BlogPost.status == "published"
         ).order_by(
             desc(BlogPost.view_count)
         ).limit(limit).all()
@@ -498,7 +510,7 @@ class BlogService:
             joinedload(BlogPost.category),
             joinedload(BlogPost.tags)
         ).filter(
-            BlogPost.is_published == True
+            BlogPost.status == "published"
         ).order_by(
             desc(BlogPost.published_at)
         ).limit(limit).all()
@@ -515,7 +527,7 @@ class BlogService:
             desc(BlogPost.created_at)
         ).offset(skip).limit(limit).all()
     
-    def get_posts_by_category(self, category_id: int, skip: int = 0, limit: int = 10) -> List[BlogPost]:
+    def get_posts_by_category(self, category_id: UUID, skip: int = 0, limit: int = 10) -> List[BlogPost]:
         """Get blog posts by category"""
         return self.db.query(BlogPost).options(
             joinedload(BlogPost.author),
@@ -524,13 +536,13 @@ class BlogService:
         ).filter(
             and_(
                 BlogPost.category_id == category_id,
-                BlogPost.is_published == True
+                BlogPost.status == "published"
             )
         ).order_by(
             desc(BlogPost.published_at)
         ).offset(skip).limit(limit).all()
     
-    def get_posts_by_tag(self, tag_id: int, skip: int = 0, limit: int = 10) -> List[BlogPost]:
+    def get_posts_by_tag(self, tag_id: UUID, skip: int = 0, limit: int = 10) -> List[BlogPost]:
         """Get blog posts by tag"""
         return self.db.query(BlogPost).options(
             joinedload(BlogPost.author),
@@ -539,7 +551,7 @@ class BlogService:
         ).join(BlogPost.tags).filter(
             and_(
                 BlogTag.id == tag_id,
-                BlogPost.is_published == True
+                BlogPost.status == "published"
             )
         ).order_by(
             desc(BlogPost.published_at)

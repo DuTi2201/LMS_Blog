@@ -8,9 +8,11 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ChevronDown, ChevronUp, Plus, Edit, Trash2, Calendar, Loader2, Trophy } from "lucide-react"
 import { LessonDialog } from "@/components/lesson-dialog"
+import { LessonFormDialog } from "@/components/lesson-form-dialog"
 import { ModuleDialog } from "@/components/module-dialog"
+import { CourseDialog } from "@/components/course-dialog"
 import { apiClient } from "@/lib/api"
-import type { Course as ApiCourse, Module as ApiModule, Lesson as ApiLesson, User as ApiUser } from "@/lib/api"
+import type { Course as ApiCourse, Module as ApiModule, Lesson as ApiLesson, User } from "@/lib/api"
 
 // Extended types for UI components
 interface Course extends ApiCourse {
@@ -32,7 +34,7 @@ interface Lesson extends ApiLesson {
 }
 
 export default function LearningPathPage() {
-  const [user, setUser] = useState<ApiUser | null>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [courses, setCourses] = useState<Course[]>([])
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null)
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
@@ -40,18 +42,30 @@ export default function LearningPathPage() {
   const [isLessonDialogOpen, setIsLessonDialogOpen] = useState(false)
   const [editingModule, setEditingModule] = useState<Module | null>(null)
   const [isModuleDialogOpen, setIsModuleDialogOpen] = useState(false)
+  const [editingLesson, setEditingLesson] = useState<Lesson | null>(null)
+  const [isLessonFormDialogOpen, setIsLessonFormDialogOpen] = useState(false)
+  const [currentModuleId, setCurrentModuleId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null)
+  const [isCourseDialogOpen, setIsCourseDialogOpen] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true)
-        const [userData, coursesData] = await Promise.all([
-          apiClient.getCurrentUser(),
-          apiClient.getCourses()
-        ])
-        setUser(userData as ApiUser)
+        const userData = await apiClient.getCurrentUser()
+        setUser(userData)
+        
+        // Fetch courses based on user role
+        let coursesData: any[]
+        if (userData.role === 'admin') {
+          // Admin can see all courses
+          coursesData = await apiClient.getCourses(0, 100)
+        } else {
+          // Other roles can only see enrolled courses
+          coursesData = await apiClient.getEnrolledCourses(0, 100)
+        }
         
         // Transform courses data to include modules with lessons
         const coursesWithModules = await Promise.all(
@@ -140,6 +154,146 @@ export default function LearningPathPage() {
     }
   }
 
+  const handleAddLesson = (moduleId: string) => {
+    setCurrentModuleId(moduleId)
+    setEditingLesson(null)
+    setIsLessonFormDialogOpen(true)
+  }
+
+  const handleEditLesson = (lesson: Lesson) => {
+    setEditingLesson(lesson)
+    setIsLessonFormDialogOpen(true)
+  }
+
+  const handleDeleteLesson = async (lessonId: string, moduleId: string) => {
+    if (!selectedCourse) return
+    
+    try {
+      // Note: Implement delete lesson API call when available
+      // await apiClient.deleteLesson(lessonId)
+      
+      // Update local state
+      const updatedModules = selectedCourse.modules.map(module => {
+        if (module.id === moduleId) {
+          return {
+            ...module,
+            lessons: module.lessons.filter(lesson => lesson.id !== lessonId)
+          }
+        }
+        return module
+      })
+      
+      const updatedCourse = { ...selectedCourse, modules: updatedModules }
+      setSelectedCourse(updatedCourse)
+      setCourses(courses.map(c => c.id === selectedCourse.id ? updatedCourse : c))
+    } catch (error) {
+      console.error('Failed to delete lesson:', error)
+    }
+  }
+
+  const handleSaveLesson = (lessonData: any) => {
+    if (!selectedCourse || !currentModuleId) return
+
+    const updatedModules = selectedCourse.modules.map(module => {
+      if (module.id === currentModuleId) {
+        const currentLessons = module.lessons || []
+        const updatedLessons = editingLesson
+          ? currentLessons.map(lesson =>
+              lesson.id === editingLesson.id ? { ...lesson, ...lessonData } : lesson
+            )
+          : [
+              ...currentLessons,
+              {
+                ...lessonData,
+                id: Date.now().toString(),
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                module_id: currentModuleId,
+                date: new Date().toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })
+              }
+            ]
+        
+        return { ...module, lessons: updatedLessons }
+      }
+      return module
+    })
+
+    const updatedCourse = { ...selectedCourse, modules: updatedModules }
+    setSelectedCourse(updatedCourse)
+    setCourses(courses.map(c => c.id === selectedCourse.id ? updatedCourse : c))
+    setIsLessonFormDialogOpen(false)
+    setCurrentModuleId(null)
+  }
+
+  const handleAddCourse = () => {
+    setEditingCourse(null)
+    setIsCourseDialogOpen(true)
+  }
+
+  const handleEditCourse = (course: Course) => {
+    setEditingCourse(course)
+    setIsCourseDialogOpen(true)
+  }
+
+  const handleDeleteCourse = async (courseId: string) => {
+    try {
+      await apiClient.deleteCourse(courseId)
+      
+      // Update local state
+      const updatedCourses = courses.filter(c => c.id !== courseId)
+      setCourses(updatedCourses)
+      
+      // If deleted course was selected, select first available course
+      if (selectedCourse?.id === courseId) {
+        setSelectedCourse(updatedCourses[0] || null)
+      }
+    } catch (error) {
+      console.error('Failed to delete course:', error)
+      setError('Failed to delete course')
+    }
+  }
+
+  const handleSaveCourse = async (courseData: any) => {
+    try {
+      let savedCourse: Course
+      
+      if (editingCourse) {
+        // Update existing course
+        savedCourse = await apiClient.updateCourse(editingCourse.id, courseData)
+        const courseWithModules = { ...savedCourse, modules: savedCourse.modules || [] }
+        const updatedCourses = courses.map(c => 
+          c.id === editingCourse.id ? { ...courseWithModules, modules: c.modules } : c
+        )
+        setCourses(updatedCourses)
+        
+        // Update selected course if it's the one being edited
+        if (selectedCourse?.id === editingCourse.id) {
+          setSelectedCourse({ ...savedCourse, modules: selectedCourse.modules })
+        }
+      } else {
+        // Create new course
+        savedCourse = await apiClient.createCourse(courseData)
+        const newCourse = { ...savedCourse, modules: savedCourse.modules || [] }
+        setCourses([...courses, newCourse])
+        
+        // Select the new course if no course is currently selected
+        if (!selectedCourse) {
+          setSelectedCourse(newCourse)
+        }
+      }
+      
+      setIsCourseDialogOpen(false)
+    } catch (error) {
+      console.error('Failed to save course:', error)
+      setError('Failed to save course')
+    }
+  }
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       weekday: 'long',
@@ -183,11 +337,16 @@ export default function LearningPathPage() {
         <Header />
         <div className="container mx-auto px-4 py-8">
           <div className="text-center py-12">
-            <div className="text-gray-600 mb-4">No courses available</div>
+            <div className="text-gray-600 mb-4">
+              {user?.role === 'admin' 
+                ? 'No courses available' 
+                : 'Chưa có khoá học nào dành cho bạn'
+              }
+            </div>
             {user?.role === 'admin' && (
-              <Button onClick={handleAddModule}>
+              <Button onClick={handleAddCourse}>
                 <Plus className="w-4 h-4 mr-2" />
-                Create First Course
+                Tạo khóa học đầu tiên
               </Button>
             )}
           </div>
@@ -200,20 +359,7 @@ export default function LearningPathPage() {
     <div className="min-h-screen bg-gray-50">
       <Header />
 
-      {/* Notification Banner */}
-      <div className="bg-green-600 text-white">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Trophy className="w-5 h-5" />
-              <span>🏆 AIO2025 Exam (Thứ hệ thống) One or more contests are available for you to participate in</span>
-            </div>
-            <Button variant="outline" size="sm" className="text-green-600 bg-white hover:bg-gray-100">
-              Take a look →
-            </Button>
-          </div>
-        </div>
-      </div>
+
 
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
@@ -231,16 +377,31 @@ export default function LearningPathPage() {
                 <SelectValue placeholder="Select a course" />
               </SelectTrigger>
               <SelectContent>
-              {courses.map(course => (
-                   <SelectItem key={course.id} value={course.id}>{course.title}</SelectItem>
-                 ))}
-               </SelectContent>
-             </Select>
+                {courses.map(course => (
+                  <SelectItem key={course.id} value={course.id}>
+                    {course.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
             {user?.role === "admin" && (
-              <Button onClick={handleAddModule}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Module
-              </Button>
+              <>
+                {selectedCourse && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEditCourse(selectedCourse)}
+                    title="Chỉnh sửa khóa học hiện tại"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                )}
+                <Button onClick={handleAddCourse} title="Thêm khóa học mới">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Thêm khóa học
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -251,6 +412,12 @@ export default function LearningPathPage() {
         </div>
 
         <div className="space-y-4">
+        {user?.role === "admin" && (
+              <Button onClick={handleAddModule}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Module
+              </Button>
+            )}
           {selectedCourse.modules?.map((module) => (
             <Card key={module.id} className="overflow-hidden">
               <CardHeader
@@ -264,6 +431,9 @@ export default function LearningPathPage() {
                       <Badge variant="secondary">{module.lessons?.length || 0} lessons</Badge>
                       {user?.role === "admin" && (
                         <div className="flex space-x-2" onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="sm" onClick={() => handleAddLesson(module.id)} title="Add Lesson">
+                            <Plus className="w-4 h-4" />
+                          </Button>
                           <Button variant="ghost" size="sm" onClick={() => handleEditModule(module)}>
                             <Edit className="w-4 h-4" />
                           </Button>
@@ -294,28 +464,53 @@ export default function LearningPathPage() {
                       module.lessons.map((lesson) => (
                         <div
                           key={lesson.id}
-                          className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
-                          onClick={() => openLessonDialog(lesson)}
+                          className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                         >
-                          <div className="flex-1">
-                            <h4 className="font-medium text-gray-900">{lesson.title}</h4>
+                          <div 
+                            className="flex-1 cursor-pointer"
+                            onClick={() => openLessonDialog(lesson)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-medium text-gray-900">{lesson.title}</h4>
+                              {user?.role === "admin" && (
+                                <div className="flex space-x-1" onClick={(e) => e.stopPropagation()}>
+                                  <Button variant="ghost" size="sm" onClick={() => handleEditLesson(lesson)} title="Edit Lesson">
+                                    <Edit className="w-3 h-3" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" onClick={() => handleDeleteLesson(lesson.id, module.id)} title="Delete Lesson">
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
                             <div className="flex items-center space-x-4 text-sm text-gray-500 mt-1">
                               <div className="flex items-center space-x-1">
                                 <Calendar className="w-4 h-4" />
-                                <span>{formatDate(lesson.created_at)}</span>
+                                <span>{lesson.date || formatDate(lesson.created_at)}</span>
                               </div>
+                              {lesson.instructor && (
+                                <span className="text-purple-600">👨‍🏫 {lesson.instructor}</span>
+                              )}
                               {lesson.video_url && (
-                                <span className="text-blue-600">Video Available</span>
+                                <span className="text-blue-600">📹 Video Available</span>
                               )}
                               {lesson.duration && (
-                                <span className="text-green-600">{lesson.duration} min</span>
+                                <span className="text-green-600">⏱️ {lesson.duration} min</span>
                               )}
                             </div>
-                            <div className="mt-2 text-sm text-gray-600 line-clamp-2">
-                              {lesson.lesson_type && `Type: ${lesson.lesson_type}`}
+                            <div className="mt-2 text-sm text-gray-600">
+                              {lesson.quizLink && (
+                                <span className="text-orange-600">📝 Quiz Available</span>
+                              )}
+                              {lesson.attachments && lesson.attachments.length > 0 && (
+                                <span className="text-blue-600 ml-2">📎 {lesson.attachments.length} attachment(s)</span>
+                              )}
+                              {lesson.notification && (
+                                <span className="text-yellow-600 ml-2">🔔 Notification</span>
+                              )}
                             </div>
                           </div>
-                          <Badge variant="outline" className="text-xs">
+                          <Badge variant="outline" className="text-xs ml-2">
                             Lesson
                           </Badge>
                         </div>
@@ -330,6 +525,13 @@ export default function LearningPathPage() {
       </div>
 
       <LessonDialog lesson={selectedLesson} open={isLessonDialogOpen} onOpenChange={setIsLessonDialogOpen} />
+
+      <LessonFormDialog
+        lesson={editingLesson}
+        open={isLessonFormDialogOpen}
+        onOpenChange={setIsLessonFormDialogOpen}
+        onSave={handleSaveLesson}
+      />
 
       <ModuleDialog
         module={editingModule}
@@ -361,6 +563,14 @@ export default function LearningPathPage() {
           setCourses(courses.map((c) => (c.id === updatedCourse.id ? updatedCourse : c)))
           setSelectedCourse(updatedCourse)
         }}
+      />
+
+      <CourseDialog
+        course={editingCourse}
+        open={isCourseDialogOpen}
+        onOpenChange={setIsCourseDialogOpen}
+        onSave={handleSaveCourse}
+        onDelete={handleDeleteCourse}
       />
     </div>
   )

@@ -1,5 +1,6 @@
 from typing import List, Optional
 from uuid import UUID
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from ...core.database import get_db
@@ -12,6 +13,7 @@ from ...schemas.blog import (
 )
 from ...services.blog_service import BlogService
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -241,8 +243,10 @@ def update_blog_post(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         # Log the full error for debugging
-        # logger.error(f"Error updating post {post_id}: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred")
+        import traceback
+        logger.error(f"Error updating post {post_id}: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.delete("/{post_id}")

@@ -4,8 +4,6 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Github } from "lucide-react"
-import Image from "next/image"
 import { apiClient, Category, Tag } from "@/lib/api"
 
 export function Sidebar() {
@@ -37,29 +35,21 @@ export function Sidebar() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center">
-            <div className="w-32 h-32 mx-auto mb-4 rounded-lg overflow-hidden">
-              <Image
-                src="/placeholder.svg?height=128&width=128"
-                alt="AI Blog Pro Team"
-                width={128}
-                height={128}
-                className="w-full h-full object-cover"
-              />
+      
+       
+           {/* Hero Section */}
+           <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-12">
+            <div className="max-w-4xl mx-auto px-6 text-center">
+              <h1 className="text-4xl font-bold mb-4">
+                AI Blog Pro Team
+              </h1>
+              <p className="text-lg opacity-90">
+                AI Journey of AIO 2025 - Khám phá hành trình trí tuệ nhân tạo
+              </p>
             </div>
-            <h3 className="font-semibold text-lg mb-2">AI Blog Pro Team</h3>
-            <p className="text-gray-600 text-sm mb-4">
-              AI Journey of AIO 2025 - Khám phá hành trình trí tuệ nhân tạo, từ những bước đầu đến tương lai công nghệ.
-            </p>
-            <Button variant="outline" size="sm" className="w-full bg-transparent">
-              <Github className="w-4 h-4 mr-2" />
-              GitHub
-            </Button>
           </div>
-        </CardContent>
-      </Card>
+        
+    
 
       <Card>
         <CardHeader>

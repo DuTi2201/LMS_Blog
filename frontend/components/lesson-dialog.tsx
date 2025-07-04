@@ -3,17 +3,21 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, User, ExternalLink, X } from "lucide-react"
+import { User, ExternalLink, Calendar, X } from "lucide-react"
 
 interface Lesson {
   id: string
   title: string
-  date: string
+  date?: string
+  created_at?: string
   instructor?: string
   zoomLink?: string
   quizLink?: string
   attachments?: { name: string; url: string }[]
   notification?: string
+  video_url?: string
+  duration?: number
+  description?: string
 }
 
 interface LessonDialogProps {
@@ -42,84 +46,97 @@ export function LessonDialog({ lesson, open, onOpenChange }: LessonDialogProps) 
         </DialogHeader>
 
         <div className="space-y-6">
+          {/* Zoom Information */}
           {lesson.zoomLink && (
-            <div>
-              <p className="text-sm text-gray-600">zoom: {lesson.zoomLink.split("/").pop()}</p>
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <p className="text-sm text-gray-600 mb-1">Zoom Meeting:</p>
+              <p className="font-mono text-sm">{lesson.zoomLink}</p>
             </div>
           )}
 
-          <div className="border-t border-gray-200 pt-4">
-            <p className="text-sm text-gray-600 mb-2">Quiz sau buổi học:</p>
-            {lesson.quizLink && (
+          {/* Instructor Information */}
+          {lesson.instructor && (
+            <div className="flex items-center space-x-2">
+              <User className="w-5 h-5 text-gray-400" />
+              <span className="font-medium text-lg">{lesson.instructor}</span>
+            </div>
+          )}
+
+          {/* Quiz Information */}
+          {lesson.quizLink && (
+            <div className="border-t border-gray-200 pt-4">
+              <p className="text-sm text-gray-600 mb-2">Bài tập: Quiz sau buổi học:</p>
               <a
                 href={lesson.quizLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 hover:underline text-sm"
+                className="text-blue-600 hover:underline text-sm flex items-center space-x-1"
               >
-                {lesson.quizLink}
+                <span>{lesson.quizLink}</span>
+                <ExternalLink className="w-4 h-4" />
               </a>
-            )}
-          </div>
-
-          {lesson.instructor && (
-            <div className="flex items-center space-x-2">
-              <User className="w-4 h-4 text-gray-400" />
-              <span className="font-medium">{lesson.instructor}</span>
             </div>
           )}
 
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h4 className="font-medium text-gray-900 mb-2">{lesson.title}</h4>
-            <div className="flex items-center space-x-2 text-sm text-gray-500 mb-3">
-              <span>zoom: {lesson.zoomLink?.split("/").pop()}</span>
-            </div>
-
-            <div className="border-t border-gray-200 pt-3 mt-3">
-              <p className="text-sm text-gray-600 mb-2">Quiz sau buổi học:</p>
-              {lesson.quizLink && (
-                <a
-                  href={lesson.quizLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline text-sm flex items-center space-x-1"
-                >
-                  <span>{lesson.quizLink}</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              )}
-            </div>
-
-            {lesson.attachments && lesson.attachments.length > 0 && (
-              <div className="mt-4">
+          {/* Attachments */}
+          {lesson.attachments && lesson.attachments.length > 0 && (
+            <div className="border-t border-gray-200 pt-4">
+              <p className="text-sm text-gray-600 mb-3">Tài liệu đính kèm:</p>
+              <div className="space-y-2">
                 {lesson.attachments.map((attachment, index) => (
                   <a
                     key={index}
                     href={attachment.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center space-x-2 text-blue-600 hover:underline text-sm"
+                    className="flex items-center space-x-2 text-blue-600 hover:underline text-sm p-2 bg-gray-50 rounded hover:bg-gray-100 transition-colors"
                   >
-                    <span>{attachment.name}</span>
+                    <span className="font-medium">{attachment.name}</span>
                     <span className="text-xs text-gray-500">03 Jun 2025</span>
-                    <ExternalLink className="w-3 h-3" />
+                    <ExternalLink className="w-4 h-4" />
                   </a>
                 ))}
               </div>
-            )}
+            </div>
+          )}
 
-            <Badge className="mt-3">2025</Badge>
-          </div>
+          {/* Description */}
+          {lesson.description && (
+            <div className="border-t border-gray-200 pt-4">
+              <p className="text-sm text-gray-600 mb-2">Mô tả:</p>
+              <p className="text-sm text-gray-800">{lesson.description}</p>
+            </div>
+          )}
 
+          {/* Duration */}
+          {lesson.duration && (
+            <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <Calendar className="w-4 h-4" />
+              <span>Thời lượng: {lesson.duration} phút</span>
+            </div>
+          )}
+
+          {/* Notification */}
           {lesson.notification && (
             <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
-              <h5 className="font-medium text-gray-900 mb-1">Notification</h5>
+              <h5 className="font-medium text-gray-900 mb-1">Thông báo</h5>
               <p className="text-sm text-gray-700">{lesson.notification}</p>
             </div>
           )}
 
-          <div className="flex justify-between">
-            <Button variant="default">View recording 🎬</Button>
+          {/* Action Buttons */}
+          <div className="flex justify-between pt-4 border-t">
+            {lesson.video_url ? (
+              <a
+                href={lesson.video_url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button variant="default">View recording 🎬</Button>
+              </a>
+            ) : (
+              <Button variant="default" disabled>View recording 🎬</Button>
+            )}
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Close
             </Button>

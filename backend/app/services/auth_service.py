@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from fastapi import HTTPException, status
@@ -13,8 +13,8 @@ from ..core.security import (
     create_password_reset_token,
     verify_password_reset_token
 )
-from ..models.user import User
-from ..schemas.user import UserCreate, UserUpdate, UserLogin
+from ..models.user import User, UserRole
+from ..schemas.user import UserCreate, UserUpdate
 from ..core.config import settings
 
 
@@ -22,7 +22,7 @@ class AuthService:
     def __init__(self, db: Session):
         self.db = db
     
-    def get_user_by_id(self, user_id: int) -> Optional[User]:
+    def get_user_by_id(self, user_id: str) -> Optional[User]:
         """Get user by ID"""
         return self.db.query(User).filter(User.id == user_id).first()
     
@@ -145,7 +145,7 @@ class AuthService:
                 detail="Invalid refresh token"
             )
     
-    def update_user(self, user_id: int, user_update: UserUpdate) -> User:
+    def update_user(self, user_id: str, user_update: UserUpdate) -> User:
         """Update user information"""
         user = self.get_user_by_id(user_id)
         if not user:
@@ -189,7 +189,7 @@ class AuthService:
         
         return user
     
-    def deactivate_user(self, user_id: int) -> User:
+    def deactivate_user(self, user_id: str) -> User:
         """Deactivate user account"""
         user = self.get_user_by_id(user_id)
         if not user:
@@ -206,7 +206,7 @@ class AuthService:
         
         return user
     
-    def verify_user_email(self, user_id: int) -> User:
+    def verify_user_email(self, user_id: str) -> User:
         """Mark user email as verified"""
         user = self.get_user_by_id(user_id)
         if not user:
@@ -312,3 +312,37 @@ class AuthService:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Could not validate credentials"
             )
+    
+    def get_users(
+        self,
+        skip: int = 0,
+        limit: int = 100,
+        role: Optional[UserRole] = None,
+        is_active: Optional[bool] = None,
+        search: Optional[str] = None
+    ) -> List[User]:
+        """Get list of users with filtering"""
+        query = self.db.query(User)
+        
+        # Filter by role
+        if role is not None:
+            query = query.filter(User.role == role)
+        
+        # Filter by active status
+        if is_active is not None:
+            query = query.filter(User.is_active == is_active)
+        
+        # Search by name or email
+        if search:
+            search_term = f"%{search}%"
+            query = query.filter(
+                or_(
+                    User.full_name.ilike(search_term),
+                    User.email.ilike(search_term),
+                    User.username.ilike(search_term)
+                )
+            )
+        
+        # Apply pagination
+        users = query.offset(skip).limit(limit).all()
+        return users
