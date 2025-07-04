@@ -180,9 +180,47 @@ class LearningService:
         return True
     
     def enroll_user_in_course(self, user_id: str, course_id: str) -> UserEnrollment:
-        """Enroll user in course (for admin use)"""
-        enrollment_create = UserEnrollmentCreate(user_id=user_id, course_id=course_id)
-        return self.enroll_user(enrollment_create, user_id)
+        """Enroll user in course (for admin use) - allows enrollment in unpublished courses"""
+        # Check if course exists
+        course = self.get_course_by_id(course_id)
+        if not course:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Course not found"
+            )
+        
+        # Admin can enroll users in unpublished courses, so skip is_published check
+        
+        # Check if user is already enrolled
+        existing_enrollment = self.db.query(UserEnrollment).filter(
+            and_(
+                UserEnrollment.user_id == user_id,
+                UserEnrollment.course_id == course_id
+            )
+        ).first()
+        
+        if existing_enrollment:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User is already enrolled in this course"
+            )
+        
+        # Create enrollment
+        db_enrollment = UserEnrollment(
+            user_id=user_id,
+            course_id=course_id,
+            enrolled_at=datetime.utcnow()
+        )
+        
+        self.db.add(db_enrollment)
+        
+        # Update course enrollment count
+        course.enrollment_count += 1
+        
+        self.db.commit()
+        self.db.refresh(db_enrollment)
+        
+        return db_enrollment
     
     def unenroll_user_from_course(self, user_id: str, course_id: str) -> bool:
         """Unenroll user from course (for admin use)"""

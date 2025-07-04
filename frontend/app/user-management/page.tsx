@@ -148,12 +148,18 @@ export default function UserManagementPage() {
         await updateUserEnrollments(editingUser.id, formData.courseIds)
       } else {
         // Create new user with course assignments
-        savedUser = await apiClient.createUser({
+        const createData: any = {
           email: formData.email,
-          full_name: formData.full_name,
           role: formData.role,
           course_ids: formData.courseIds
-        })
+        }
+        
+        // Only include full_name if it's not empty
+        if (formData.full_name && formData.full_name.trim()) {
+          createData.full_name = formData.full_name
+        }
+        
+        savedUser = await apiClient.createUser(createData)
       }
       
       setIsDialogOpen(false)
@@ -306,7 +312,7 @@ export default function UserManagementPage() {
                 <Label htmlFor="search">Search Users</Label>
                 <Input
                   id="search"
-                  placeholder="Search by username, email, or name..."
+                  placeholder="Search by email or full name..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -338,7 +344,7 @@ export default function UserManagementPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Username</TableHead>
+                  <TableHead>Full Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Courses</TableHead>
@@ -350,7 +356,7 @@ export default function UserManagementPage() {
               <TableBody>
                 {filteredUsers.map((user) => (
                   <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.username}</TableCell>
+                    <TableCell className="font-medium">{user.full_name || 'N/A'}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
                       <Badge className={getRoleBadgeColor(user.role)}>

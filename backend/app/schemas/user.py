@@ -132,7 +132,7 @@ class GoogleUserInfo(BaseModel):
 
 class UserCreateByAdmin(BaseModel):
     email: EmailStr
-    full_name: str
+    full_name: Optional[str] = None  # Optional - will be updated from Google login
     role: str = "user"
     course_ids: Optional[list[UUID]] = []
     

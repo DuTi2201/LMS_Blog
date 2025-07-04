@@ -230,6 +230,18 @@ class AuthService:
         
         return user
     
+    def delete_user(self, user_id: str) -> bool:
+        """Permanently delete user from database"""
+        user = self.get_user_by_id(user_id)
+        if not user:
+            return False
+        
+        # Delete user from database
+        self.db.delete(user)
+        self.db.commit()
+        
+        return True
+    
     def verify_user_email(self, user_id: str) -> User:
         """Mark user email as verified"""
         user = self.get_user_by_id(user_id)
@@ -448,7 +460,7 @@ class AuthService:
         # Create new user for Google OAuth
         db_user = User(
             email=user_create.email,
-            full_name=user_create.full_name,
+            full_name=user_create.full_name or "",  # Default to empty string if not provided
             role=user_create.role,
             auth_provider="google",
             is_active=True,

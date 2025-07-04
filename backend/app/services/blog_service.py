@@ -536,7 +536,7 @@ class BlogService:
         ).filter(
             and_(
                 BlogPost.category_id == category_id,
-                BlogPost.status == "published"
+                BlogPost.is_published == True
             )
         ).order_by(
             desc(BlogPost.published_at)
@@ -551,7 +551,7 @@ class BlogService:
         ).join(BlogPost.tags).filter(
             and_(
                 BlogTag.id == tag_id,
-                BlogPost.status == "published"
+                BlogPost.is_published == True
             )
         ).order_by(
             desc(BlogPost.published_at)

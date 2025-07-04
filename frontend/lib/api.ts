@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://192.168.2.101:8001';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8001';
 
 // Response interfaces
 export interface User {
@@ -463,7 +463,7 @@ class ApiClient {
 
   async createUser(userData: {
     email: string;
-    full_name: string;
+    full_name?: string;
     role?: string;
     course_ids?: string[];
   }): Promise<User> {
@@ -499,7 +499,7 @@ class ApiClient {
 
   // Enrollment methods
   async getUserEnrollments(userId: string): Promise<any[]> {
-    return this.request<any[]>(`/api/v1/users/${userId}/enrollments`);
+    return this.request<any[]>(`/api/v1/enrollments/user/${userId}`);
   }
 
   async enrollUserInCourse(userId: string, courseId: string): Promise<any> {
