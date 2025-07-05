@@ -160,7 +160,7 @@ class LessonResponseOld(BaseModel):
     title: str
     description: Optional[str] = None
     lesson_date: Optional[datetime] = None
-    instructor_name: Optional[str] = None
+    instructor: Optional[str] = None
     zoom_link: Optional[str] = None
     quiz_link: Optional[str] = None
     notification: Optional[str] = None

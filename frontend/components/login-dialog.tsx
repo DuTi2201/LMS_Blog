@@ -25,7 +25,7 @@ export function LoginDialog({ open, onOpenChange, onLogin }: LoginDialogProps) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [fullName, setFullName] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [activeTab, setActiveTab] = useState("login")
@@ -83,40 +83,7 @@ export function LoginDialog({ open, onOpenChange, onLogin }: LoginDialogProps) {
     }
   }
 
-  const handleRegister = async () => {
-    if (!email.trim() || !password.trim() || !fullName.trim() || !confirmPassword.trim()) {
-      setError("Please fill in all fields")
-      return
-    }
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match")
-      return
-    }
-
-    setLoading(true)
-    setError("")
-
-    try {
-      await apiClient.register(email, password, fullName)
-      
-      // Auto login after registration
-      const userData = await apiClient.login(email, password)
-      onLogin(userData)
-      onOpenChange(false)
-      
-      // Reset form
-      setEmail("")
-      setPassword("")
-      setFullName("")
-      setConfirmPassword("")
-      setActiveTab("login")
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Registration failed")
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleGoogleLogin = async (credential: string) => {
     setLoading(true)
@@ -190,9 +157,9 @@ export function LoginDialog({ open, onOpenChange, onLogin }: LoginDialogProps) {
         </DialogHeader>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="w-full hidden">
             <TabsTrigger value="login">Login</TabsTrigger>
-            <TabsTrigger value="register">Register</TabsTrigger>
+            
           </TabsList>
           
           <TabsContent value="login" className="space-y-4">
@@ -258,59 +225,6 @@ export function LoginDialog({ open, onOpenChange, onLogin }: LoginDialogProps) {
             )}
           </TabsContent>
           
-          <TabsContent value="register" className="space-y-4">
-            <div>
-              <Label htmlFor="register-name">Full Name</Label>
-              <Input 
-                id="register-name" 
-                value={fullName} 
-                onChange={(e) => setFullName(e.target.value)} 
-                placeholder="Enter your full name" 
-                disabled={loading}
-              />
-            </div>
-            <div>
-              <Label htmlFor="register-email">Email</Label>
-              <Input 
-                id="register-email" 
-                type="email"
-                value={email} 
-                onChange={(e) => setEmail(e.target.value)} 
-                placeholder="Enter your email" 
-                disabled={loading}
-              />
-            </div>
-            <div>
-              <Label htmlFor="register-password">Password</Label>
-              <Input 
-                id="register-password" 
-                type="password"
-                value={password} 
-                onChange={(e) => setPassword(e.target.value)} 
-                placeholder="Enter your password" 
-                disabled={loading}
-              />
-            </div>
-            <div>
-              <Label htmlFor="confirm-password">Confirm Password</Label>
-              <Input 
-                id="confirm-password" 
-                type="password"
-                value={confirmPassword} 
-                onChange={(e) => setConfirmPassword(e.target.value)} 
-                placeholder="Confirm your password" 
-                disabled={loading}
-              />
-            </div>
-            {error && (
-              <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
-                {error}
-              </div>
-            )}
-            <Button onClick={handleRegister} className="w-full" disabled={loading}>
-              {loading ? "Creating account..." : "Create Account"}
-            </Button>
-          </TabsContent>
         </Tabs>
       </DialogContent>
     </Dialog>
