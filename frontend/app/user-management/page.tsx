@@ -62,7 +62,10 @@ export default function UserManagementPage() {
         usersData.map(async (user: User) => {
           try {
             const enrollments = await apiClient.getUserEnrollments(user.id)
-            const enrolledCourses = enrollments.map((enrollment: any) => enrollment.course)
+            // Extract course data from enrollments, ensuring course exists
+            const enrolledCourses = enrollments
+              .map((enrollment: any) => enrollment.course)
+              .filter((course: any) => course && course.id) // Filter out null/undefined courses
             return { ...user, enrolledCourses }
           } catch (error) {
             console.error(`Error fetching enrollments for user ${user.id}:`, error)
@@ -111,7 +114,7 @@ export default function UserManagementPage() {
       email: user.email,
       full_name: user.full_name,
       role: user.role,
-      courseIds: user.enrolledCourses?.map(course => course.id) || []
+      courseIds: user.enrolledCourses?.map(course => course?.id).filter(id => id) || []
     })
     setIsDialogOpen(true)
   }
@@ -366,8 +369,8 @@ export default function UserManagementPage() {
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {user.enrolledCourses?.slice(0, 2).map((course) => (
-                          <Badge key={course.id} variant="outline" className="text-xs">
-                            {course.title}
+                          <Badge key={course?.id || Math.random()} variant="outline" className="text-xs">
+                            {course?.title || 'Unknown Course'}
                           </Badge>
                         ))}
                         {user.enrolledCourses && user.enrolledCourses.length > 2 && (
@@ -456,22 +459,22 @@ export default function UserManagementPage() {
                 <Label>Assign Courses</Label>
                 <div className="mt-2 space-y-2 max-h-40 overflow-y-auto border rounded p-3">
                   {courses.map((course) => (
-                    <div key={course.id} className="flex items-center space-x-2">
+                    <div key={course?.id || Math.random()} className="flex items-center space-x-2">
                       <input
                         type="checkbox"
-                        id={`course-${course.id}`}
-                        checked={formData.courseIds.includes(course.id)}
+                        id={`course-${course?.id}`}
+                        checked={formData.courseIds.includes(course?.id || '')}
                         onChange={(e) => {
-                          if (e.target.checked) {
+                          if (e.target.checked && course?.id) {
                             setFormData({...formData, courseIds: [...formData.courseIds, course.id]})
-                          } else {
+                          } else if (course?.id) {
                             setFormData({...formData, courseIds: formData.courseIds.filter(id => id !== course.id)})
                           }
                         }}
                         className="rounded"
                       />
-                      <label htmlFor={`course-${course.id}`} className="text-sm">
-                        {course.title}
+                      <label htmlFor={`course-${course?.id}`} className="text-sm">
+                        {course?.title || 'Unknown Course'}
                       </label>
                     </div>
                   ))}

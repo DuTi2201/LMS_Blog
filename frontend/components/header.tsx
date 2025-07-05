@@ -62,15 +62,7 @@ export function Header() {
                 <Link href="/" className="text-gray-700 hover:text-gray-900">
                   Home
                 </Link>
-                <Link href="/archive" className="text-gray-700 hover:text-gray-900">
-                  Archive
-                </Link>
-                <Link href="/categories" className="text-gray-700 hover:text-gray-900">
-                  Categories
-                </Link>
-                <Link href="/tags" className="text-gray-700 hover:text-gray-900">
-                  Tags
-                </Link>
+                
                 <Link href="/about" className="text-gray-700 hover:text-gray-900">
                   About
                 </Link>

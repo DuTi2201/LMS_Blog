@@ -8,7 +8,6 @@ import { Calendar, Clock, BookOpen } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
-import rehypeRaw from "rehype-raw"
 import "katex/dist/katex.css"
 import { apiClient, BlogPost } from "@/lib/api"
 
@@ -66,7 +65,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
         <Header />
         <div className="container mx-auto px-4 py-8">
           <div className="flex gap-8">
-            <aside className="w-80 flex-shrink-0">
+            <div className="w-1/4 min-w-80 max-w-96 flex-shrink-0">
               <Sidebar 
                 categories={[]}
                 tags={[]}
@@ -79,7 +78,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
                 setSelectedCategory={() => {}}
                 setSelectedTag={() => {}}
               />
-            </aside>
+            </div>
             <main className="flex-1 max-w-4xl">
               <div className="bg-white rounded-lg shadow-sm p-8">
                 <div className="animate-pulse">
@@ -107,7 +106,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
         <Header />
         <div className="container mx-auto px-4 py-8">
           <div className="flex gap-8">
-            <aside className="w-80 flex-shrink-0">
+            <div className="w-1/4 min-w-80 max-w-96 flex-shrink-0">
               <Sidebar 
                 categories={[]}
                 tags={[]}
@@ -120,7 +119,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
                 setSelectedCategory={() => {}}
                 setSelectedTag={() => {}}
               />
-            </aside>
+            </div>
             <main className="flex-1 max-w-4xl">
               <div className="bg-white rounded-lg shadow-sm p-8 text-center">
                 <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -140,7 +139,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
         <Header />
         <div className="container mx-auto px-4 py-8">
           <div className="flex gap-8">
-            <aside className="w-80 flex-shrink-0">
+            <div className="w-1/4 min-w-80 max-w-96 flex-shrink-0">
               <Sidebar 
                 categories={[]}
                 tags={[]}
@@ -153,7 +152,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
                 setSelectedCategory={() => {}}
                 setSelectedTag={() => {}}
               />
-            </aside>
+            </div>
             <main className="flex-1 max-w-4xl">
               <div className="bg-white rounded-lg shadow-sm p-8 text-center">
                 <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -172,7 +171,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
       <Header />
       <div className="container mx-auto px-4 py-8">
         <div className="flex gap-8">
-          <aside className="w-80 flex-shrink-0">
+          <div className="w-1/4 min-w-80 max-w-96 flex-shrink-0">
             <Sidebar 
               categories={[]}
               tags={[]}
@@ -185,7 +184,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
               setSelectedCategory={() => {}}
               setSelectedTag={() => {}}
             />
-          </aside>
+          </div>
           <main className="flex-1 max-w-4xl">
             <article className="bg-white rounded-lg shadow-sm p-8">
               <header className="mb-8">
@@ -233,7 +232,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
               <div className="prose prose-lg max-w-none">
                 <ReactMarkdown
                   remarkPlugins={[remarkMath]}
-                  rehypePlugins={[rehypeKatex, rehypeRaw]}
+                  rehypePlugins={[rehypeKatex]}
                   components={{
                     // Custom styling for different elements
                     h1: ({ children }) => (

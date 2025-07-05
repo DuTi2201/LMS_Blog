@@ -154,7 +154,7 @@ def delete_module(
     return {"message": "Module deleted successfully"}
 
 
-@router.get("/{module_id}/lessons")
+@router.get("/{module_id}/lessons", response_model=List[LessonResponse])
 def get_module_lessons(
     module_id: UUID,
     skip: int = Query(0, ge=0),
@@ -196,11 +196,8 @@ def get_module_lessons(
         limit=limit
     )
     
-    return {
-        "module": module,
-        "lessons": lessons,
-        "total": len(lessons)
-    }
+    # Return only lessons to prevent circular reference
+    return [LessonResponse.from_orm_with_attachments(lesson) for lesson in lessons]
 
 
 @router.post("/{module_id}/lessons", response_model=LessonResponse, status_code=status.HTTP_201_CREATED)
@@ -228,12 +225,9 @@ def create_lesson_in_module(
             detail="Not enough permissions to create lesson in this module"
         )
     
-    # Set the module_id from URL parameter (convert UUID to string)
-    lesson_create.module_id = str(module_id)
-    
     try:
         lesson = learning_service.create_lesson(lesson_create, module_id, current_user.id)
-        return lesson
+        return LessonResponse.from_orm_with_attachments(lesson)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

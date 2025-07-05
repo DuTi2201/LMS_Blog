@@ -82,7 +82,9 @@ def get_user_enrollments(
         skip=skip,
         limit=limit
     )
-    return enrollments
+    
+    # Convert to response with course data
+    return [UserEnrollmentResponse.from_orm_with_course(enrollment) for enrollment in enrollments]
 
 
 @router.get("/course/{course_id}", response_model=List[UserEnrollmentResponse])

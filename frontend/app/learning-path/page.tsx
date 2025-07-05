@@ -11,6 +11,7 @@ import { LessonDialog } from "@/components/lesson-dialog"
 import { LessonFormDialog } from "@/components/lesson-form-dialog"
 import { ModuleDialog } from "@/components/module-dialog"
 import { CourseDialog } from "@/components/course-dialog"
+import { LoginDialog } from "@/components/login-dialog"
 import { apiClient } from "@/lib/api"
 import type { Course as ApiCourse, Module as ApiModule, Lesson as ApiLesson, User } from "@/lib/api"
 
@@ -36,7 +37,7 @@ interface Lesson extends ApiLesson {
 interface LessonFormData {
   title: string
   description?: string
-  instructor_name?: string
+  instructor?: string
   zoom_link?: string
   quiz_link?: string
   notification?: string
@@ -58,13 +59,26 @@ export default function LearningPathPage() {
   const [error, setError] = useState<string | null>(null)
   const [editingCourse, setEditingCourse] = useState<Course | null>(null)
   const [isCourseDialogOpen, setIsCourseDialogOpen] = useState(false)
+  const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
 
   useEffect(() => {
-    const fetchData = async () => {
+    const checkAuthAndFetchData = async () => {
       try {
         setLoading(true)
+        setError(null)
+        
+        // Check if user is authenticated
+        if (!apiClient.isAuthenticated()) {
+          setIsAuthenticated(false)
+          setIsLoginDialogOpen(true)
+          setLoading(false)
+          return
+        }
+        
         const userData = await apiClient.getCurrentUser()
         setUser(userData)
+        setIsAuthenticated(true)
         
         // Fetch courses based on user role
         let coursesData: any[]
@@ -86,7 +100,7 @@ export default function LearningPathPage() {
                 const transformedLessons = lessons?.map(lesson => ({
                   ...lesson,
                   date: lesson.created_at,
-                  instructor: lesson.instructor_name || course.instructor?.full_name,
+                  instructor: lesson.instructor || course.instructor?.full_name,
                   zoomLink: lesson.zoom_link,
                   quizLink: lesson.quiz_link,
                   attachments: lesson.attachments || [],
@@ -110,13 +124,18 @@ export default function LearningPathPage() {
         setSelectedCourse(coursesWithModules[0] || null)
       } catch (err) {
         console.error('Error fetching data:', err)
-        setError('Failed to load data')
+        if (err instanceof Error && (err.message.includes('Authentication required') || err.message.includes('Session expired'))) {
+          setIsAuthenticated(false)
+          setIsLoginDialogOpen(true)
+        } else {
+          setError('Failed to load data')
+        }
       } finally {
         setLoading(false)
       }
     }
 
-    fetchData()
+    checkAuthAndFetchData()
   }, [])
 
   const toggleModule = (moduleId: string) => {
@@ -201,7 +220,7 @@ export default function LearningPathPage() {
     }
   }
 
-  const handleSaveLesson = async (lessonData: LessonFormData) => {
+  const handleSaveLesson = async (lessonData: any) => {
     if (!selectedCourse || !currentModuleId) {
       setError('No course or module selected')
       return
@@ -221,17 +240,18 @@ export default function LearningPathPage() {
       // Transform frontend lesson data to backend format (matching database schema)
       const backendLessonData = {
         title: lessonData.title.trim(),
-        description: lessonData.description?.trim() || null,
-        instructor_name: lessonData.instructor_name?.trim() || selectedCourse.instructor?.full_name || null,
-        zoom_link: lessonData.zoom_link?.trim() || null,
-        quiz_link: lessonData.quiz_link?.trim() || null,
-        notification: lessonData.notification?.trim() || null,
+        description: lessonData.description?.trim() || undefined,
+        instructor: lessonData.instructor?.trim() || undefined,
+        zoom_link: lessonData.zoom_link?.trim() || undefined,
+        quiz_link: lessonData.quiz_link?.trim() || undefined,
+        video_url: lessonData.video_url?.trim() || undefined,
+        duration: lessonData.duration ? parseInt(lessonData.duration) : undefined,
+        notification: lessonData.notification?.trim() || undefined,
         order_index: order_index,
-        is_active: true,
-        module_id: currentModuleId
+        attachments: lessonData.attachments || []
       }
       
-      let apiLesson: ApiLesson
+      let apiLesson: ApiLesson  
       
       if (editingLesson) {
         // Update existing lesson
@@ -250,7 +270,7 @@ export default function LearningPathPage() {
           month: 'long',
           day: 'numeric'
         }),
-        instructor: apiLesson.instructor_name || selectedCourse.instructor?.full_name,
+        instructor: apiLesson.instructor || selectedCourse.instructor?.full_name,
         zoomLink: apiLesson.zoom_link,
         quizLink: apiLesson.quiz_link,
         attachments: apiLesson.attachments || [],
@@ -374,6 +394,14 @@ export default function LearningPathPage() {
     })
   }
 
+  const handleLogin = (userData: User) => {
+    setUser(userData)
+    setIsAuthenticated(true)
+    setIsLoginDialogOpen(false)
+    // Reload the page data after successful login
+    window.location.reload()
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -384,6 +412,33 @@ export default function LearningPathPage() {
             <span className="ml-2">Loading learning path...</span>
           </div>
         </div>
+        <LoginDialog
+          open={isLoginDialogOpen}
+          onOpenChange={setIsLoginDialogOpen}
+          onLogin={handleLogin}
+        />
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-4">Authentication Required</h2>
+              <p className="text-gray-600 mb-4">Please log in to access the learning path.</p>
+              <Button onClick={() => setIsLoginDialogOpen(true)}>Login</Button>
+            </div>
+          </div>
+        </div>
+        <LoginDialog
+          open={isLoginDialogOpen}
+          onOpenChange={setIsLoginDialogOpen}
+          onLogin={handleLogin}
+        />
       </div>
     )
   }
@@ -668,6 +723,12 @@ export default function LearningPathPage() {
         onOpenChange={setIsCourseDialogOpen}
         onSave={handleSaveCourse}
         onDelete={handleDeleteCourse}
+      />
+
+      <LoginDialog
+        open={isLoginDialogOpen}
+        onOpenChange={setIsLoginDialogOpen}
+        onLogin={handleLogin}
       />
     </div>
   )

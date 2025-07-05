@@ -76,7 +76,7 @@ def get_lessons(
             limit=limit
         )
     
-    return lessons
+    return [LessonResponse.from_orm_with_attachments(lesson) for lesson in lessons]
 
 
 @router.get("/{lesson_id}", response_model=LessonResponse)
@@ -114,12 +114,13 @@ def get_lesson(
                     detail="Lesson not found"
                 )
     
-    return lesson
+    return LessonResponse.from_orm_with_attachments(lesson)
 
 
 @router.post("/", response_model=LessonResponse, status_code=status.HTTP_201_CREATED)
 def create_lesson(
     lesson_create: LessonCreate,
+    module_id: UUID = Query(..., description="Module ID to create lesson in"),
     current_user: User = Depends(get_instructor_user),
     learning_service: LearningService = Depends(get_learning_service)
 ):
@@ -127,10 +128,10 @@ def create_lesson(
     try:
         lesson = learning_service.create_lesson(
             lesson_create=lesson_create,
-            module_id=lesson_create.module_id,
+            module_id=module_id,
             user_id=current_user.id
         )
-        return lesson
+        return LessonResponse.from_orm_with_attachments(lesson)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -152,7 +153,7 @@ def update_lesson(
             lesson_update=lesson_update,
             user_id=current_user.id
         )
-        return lesson
+        return LessonResponse.from_orm_with_attachments(lesson)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

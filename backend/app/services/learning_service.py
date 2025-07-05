@@ -444,6 +444,22 @@ class LearningService:
         self.db.commit()
         self.db.refresh(db_lesson)
         
+        # Handle attachments if provided
+        if lesson_create.attachments:
+            for attachment_data in lesson_create.attachments:
+                if attachment_data.get('name') and attachment_data.get('url'):
+                    db_attachment = LessonAttachment(
+                        name=attachment_data['name'],
+                        url=attachment_data['url'],
+                        file_type=attachment_data.get('file_type'),
+                        file_size=attachment_data.get('file_size'),
+                        lesson_id=db_lesson.id
+                    )
+                    self.db.add(db_attachment)
+            
+            self.db.commit()
+            self.db.refresh(db_lesson)
+        
         return db_lesson
     
     def get_lesson_by_id(self, lesson_id: UUID) -> Optional[Lesson]:
@@ -481,10 +497,34 @@ class LearningService:
         
         update_data = lesson_update.model_dump(exclude_unset=True)
         
+        # Handle attachments separately
+        attachments_data = update_data.pop('attachments', None)
+        
         for field, value in update_data.items():
             setattr(lesson, field, value)
         
         lesson.updated_at = datetime.utcnow()
+        
+        # Handle attachments if provided
+        if attachments_data is not None:
+            # Remove existing attachments
+            existing_attachments = self.db.query(LessonAttachment).filter(
+                LessonAttachment.lesson_id == lesson.id
+            ).all()
+            for attachment in existing_attachments:
+                self.db.delete(attachment)
+            
+            # Add new attachments
+            for attachment_data in attachments_data:
+                if attachment_data.get('name') and attachment_data.get('url'):
+                    db_attachment = LessonAttachment(
+                        name=attachment_data['name'],
+                        url=attachment_data['url'],
+                        file_type=attachment_data.get('file_type'),
+                        file_size=attachment_data.get('file_size'),
+                        lesson_id=lesson.id
+                    )
+                    self.db.add(db_attachment)
         
         self.db.commit()
         self.db.refresh(lesson)

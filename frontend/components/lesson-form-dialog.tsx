@@ -100,8 +100,16 @@ export function LessonFormDialog({ lesson, open, onOpenChange, onSave }: LessonF
     e.preventDefault()
     
     const lessonData = {
-      ...formData,
+      title: formData.title,
+      description: formData.description,
+      instructor: formData.instructor,
+      zoom_link: formData.zoomLink,
+      quiz_link: formData.quizLink,
+      notification: formData.notification,
+      video_url: formData.video_url,
       duration: formData.duration ? parseInt(formData.duration) : undefined,
+      order_index: 0, // Default order index
+      is_active: true, // Default active state
       attachments: formData.attachments.filter(att => att.name && att.url)
     }
     

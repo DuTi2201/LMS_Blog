@@ -98,7 +98,7 @@ export interface Lesson {
   id: string;
   title: string;
   description?: string;
-  instructor_name?: string;
+  instructor?: string;
   zoom_link?: string;
   quiz_link?: string;
   notification?: string;
@@ -108,18 +108,23 @@ export interface Lesson {
   updated_at: string;
   module_id: string;
   attachments?: any[];
+  video_url?: string;
+  duration?: number;
 }
 
 export interface LessonData {
   title: string;
   description?: string;
-  instructor_name?: string;
+  instructor?: string;
   zoom_link?: string;
   quiz_link?: string;
   notification?: string;
+  duration?: number;
+  video_url?: string;
   order_index: number;
   is_active?: boolean;
   module_id?: string;
+  attachments?: { name: string; url: string; file_type?: string; file_size?: number }[];
 }
 
 export interface Category {
@@ -460,8 +465,7 @@ class ApiClient {
   }
 
   async getLessons(moduleId: string): Promise<Lesson[]> {
-    const response = await this.request<{items: Lesson[], total: number}>(`/api/v1/modules/${moduleId}/lessons`);
-    return response.items;
+    return this.request<Lesson[]>(`/api/v1/modules/${moduleId}/lessons`);
   }
 
   async createLesson(moduleId: string, lessonData: LessonData): Promise<Lesson> {

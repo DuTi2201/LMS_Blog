@@ -104,18 +104,20 @@ export default function HomePage() {
       <div className="min-h-screen bg-gray-50">
         <Header />
         <div className="flex">
-          <Sidebar 
-            categories={[]}
-            tags={[]}
-            allPosts={[]}
-            selectedCategory={null}
-            selectedTag={null}
-            onCategoryClick={() => {}}
-            onTagClick={() => {}}
-            onClearFilters={() => {}}
-            setSelectedCategory={() => {}}
-            setSelectedTag={() => {}}
-          />
+          <div className="w-1/4 min-w-80 max-w-96 flex-shrink-0">
+            <Sidebar 
+              categories={[]}
+              tags={[]}
+              allPosts={[]}
+              selectedCategory={null}
+              selectedTag={null}
+              onCategoryClick={() => {}}
+              onTagClick={() => {}}
+              onClearFilters={() => {}}
+              setSelectedCategory={() => {}}
+              setSelectedTag={() => {}}
+            />
+          </div>
           <main className="flex-1 p-6">
             <div className="max-w-7xl mx-auto">
               <div className="text-center py-12">
@@ -134,18 +136,20 @@ export default function HomePage() {
       <div className="min-h-screen bg-gray-50">
         <Header />
         <div className="flex">
-          <Sidebar 
-            categories={[]}
-            tags={[]}
-            allPosts={[]}
-            selectedCategory={null}
-            selectedTag={null}
-            onCategoryClick={() => {}}
-            onTagClick={() => {}}
-            onClearFilters={() => {}}
-            setSelectedCategory={() => {}}
-            setSelectedTag={() => {}}
-          />
+          <div className="w-1/4 min-w-80 max-w-96 flex-shrink-0">
+            <Sidebar 
+              categories={[]}
+              tags={[]}
+              allPosts={[]}
+              selectedCategory={null}
+              selectedTag={null}
+              onCategoryClick={() => {}}
+              onTagClick={() => {}}
+              onClearFilters={() => {}}
+              setSelectedCategory={() => {}}
+              setSelectedTag={() => {}}
+            />
+          </div>
           <main className="flex-1 p-6">
             <div className="max-w-7xl mx-auto">
               <div className="text-center py-12">
@@ -168,18 +172,20 @@ export default function HomePage() {
     <div className="min-h-screen bg-gray-50">
       <Header />
       <div className="flex">
-        <Sidebar 
-          categories={categories}
-          tags={tags}
-          allPosts={allPosts}
-          selectedCategory={selectedCategory}
-          selectedTag={selectedTag}
-          onCategoryClick={handleCategoryClick}
-          onTagClick={handleTagClick}
-          onClearFilters={clearFilters}
-          setSelectedCategory={setSelectedCategory}
-          setSelectedTag={setSelectedTag}
-        />
+        <div className="w-1/4 min-w-80 max-w-96 flex-shrink-0">
+          <Sidebar 
+            categories={categories}
+            tags={tags}
+            allPosts={allPosts}
+            selectedCategory={selectedCategory}
+            selectedTag={selectedTag}
+            onCategoryClick={handleCategoryClick}
+            onTagClick={handleTagClick}
+            onClearFilters={clearFilters}
+            setSelectedCategory={setSelectedCategory}
+            setSelectedTag={setSelectedTag}
+          />
+        </div>
         <main className="flex-1">
           <div className="max-w-7xl mx-auto px-6 py-8">
             {/* Blog Posts */}

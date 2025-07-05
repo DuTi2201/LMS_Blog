@@ -181,8 +181,8 @@ class ModuleResponse(ModuleBase):
     created_at: datetime
     updated_at: datetime
     
-    # Related objects
-    lessons: Optional[List[LessonResponseOld]] = None
+    # Related objects - removed to prevent circular reference
+    # lessons: Optional[List[LessonResponseOld]] = None
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -224,6 +224,7 @@ class LessonCreate(BaseModel):
     duration: Optional[int] = None
     video_url: Optional[str] = None
     order_index: int = 0
+    attachments: Optional[List[dict]] = None  # Added attachments field
     
     @field_validator("title")
     @classmethod
@@ -250,6 +251,7 @@ class LessonUpdate(BaseModel):
     duration: Optional[int] = None
     video_url: Optional[str] = None
     order_index: Optional[int] = None
+    attachments: Optional[List[dict]] = None  # Added attachments field
     
     @field_validator("title")
     @classmethod
@@ -290,6 +292,39 @@ class LessonResponse(BaseModel):
     attachments: Optional[List[dict]] = None  # Will be populated with attachment data
     
     model_config = ConfigDict(from_attributes=True)
+    
+    @classmethod
+    def from_orm_with_attachments(cls, lesson):
+        """Create LessonResponse with properly formatted attachments"""
+        lesson_dict = {
+            "id": lesson.id,
+            "title": lesson.title,
+            "description": lesson.description,
+            "instructor": lesson.instructor,
+            "zoom_link": lesson.zoom_link,
+            "quiz_link": lesson.quiz_link,
+            "notification": lesson.notification,
+            "duration": lesson.duration,
+            "video_url": lesson.video_url,
+            "order_index": lesson.order_index,
+            "is_active": lesson.is_active,
+            "created_at": lesson.created_at,
+            "updated_at": lesson.updated_at,
+            "module_id": lesson.module_id,
+            "zoomLink": lesson.zoom_link,
+            "quizLink": lesson.quiz_link,
+            "attachments": [
+                {
+                    "id": str(att.id),
+                    "name": att.name,
+                    "url": att.url,
+                    "file_type": att.file_type,
+                    "file_size": att.file_size
+                }
+                for att in (lesson.attachments or [])
+            ]
+        }
+        return cls(**lesson_dict)
 
 
 # Lesson Attachment Schemas
@@ -373,11 +408,35 @@ class UserEnrollmentResponse(UserEnrollmentBase):
     completed_at: Optional[datetime] = None
     
     # Related objects
-    user: Optional[UserResponse] = None  # Will be populated with user data
-    course: Optional[CourseResponse] = None  # Will be populated with course data
+    course: Optional[dict] = None  # Will be populated with course data
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+    
+    @classmethod
+    def from_orm_with_course(cls, enrollment):
+        """Create UserEnrollmentResponse with course data"""
+        enrollment_dict = {
+            "id": enrollment.id,
+            "user_id": enrollment.user_id,
+            "course_id": enrollment.course_id,
+            "is_completed": enrollment.is_completed,
+            "progress_percentage": enrollment.progress_percentage,
+            "enrolled_at": enrollment.enrolled_at,
+            "last_accessed_at": enrollment.last_accessed_at,
+            "completed_at": enrollment.completed_at,
+            "course": {
+                "id": str(enrollment.course.id),
+                "title": enrollment.course.title,
+                "description": enrollment.course.description,
+                "thumbnail_url": enrollment.course.thumbnail_url,
+                "difficulty_level": enrollment.course.difficulty_level,
+                "estimated_duration": enrollment.course.estimated_duration,
+                "is_published": enrollment.course.is_published,
+                "price": enrollment.course.price,
+                "instructor_id": enrollment.course.instructor_id
+            } if enrollment.course else None
+        }
+        return cls(**enrollment_dict)
 
 
 # Course List Response (for pagination)

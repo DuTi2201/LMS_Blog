@@ -239,7 +239,10 @@ def get_user_enrollments_for_user(
         skip=skip,
         limit=limit
     )
-    return enrollments
+    
+    # Convert to response with course data
+    from ..schemas.learning import UserEnrollmentResponse
+    return [UserEnrollmentResponse.from_orm_with_course(enrollment) for enrollment in enrollments]
 
 
 @router.post("/{user_id}/change-role")
@@ -301,27 +304,3 @@ def get_user_stats(
     }
     
     return stats
-
-
-@router.get("/{user_id}/enrollments", response_model=List[UserEnrollmentResponse])
-def get_user_enrollments(
-    user_id: str,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
-    current_user: User = Depends(get_current_user),
-    learning_service: LearningService = Depends(get_learning_service)
-):
-    """Get user enrollments"""
-    # Users can view their own enrollments or admins can view any user's enrollments
-    if current_user.id != user_id and current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-    
-    enrollments = learning_service.get_user_enrollments(
-        user_id=user_id,
-        skip=skip,
-        limit=limit
-    )
-    return enrollments
